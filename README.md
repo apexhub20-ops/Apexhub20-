@@ -22,8 +22,16 @@ local noclipOn = false; local noclipAlways = false; local noclipConn = nil
 local alwaysConns = {}
 local afkOn = false; local afkConn = nil
 local spinOn = false; local spinConn = nil
+
+-- GOTO
+local gotoAlvo = nil; local gotoLoopOn = false; local gotoLoopConn = nil
+local viewAlvo = nil; local viewOn = false; local viewConn = nil; local viewHighlight = nil
+
+
+local copyClickCount = {}; local copyClickThreshold = 2
+
 local gui,main,sta,led,tpBtn,barra,saveBtn,notif,ba,bd
-local telaHOME, telaPLAYER, telaESP, telaConfig
+local telaHOME, telaESP, telaPLAYER, telaVIEW, telaGOTO, telaVISUAL, telaConfig
 
 -- ============================================================
 --  ESP SETTINGS
@@ -32,7 +40,7 @@ local esp = {
     ativo = false, cor = Color3.fromRGB(0, 240, 255),
     box = false, tracerCima = false, tracerBaixo = false,
     vidaBarra = false, dist = false, nome = false,
-    chams = false,
+    chams = false, esqueleto = false,
 }
 local espD = {}; local espConn = nil; local chamsObjs = {}
 local espAlvo = nil; local espSetaDraw = nil
@@ -124,21 +132,63 @@ local function espLigar()
             local hp = hum.Health
             if hp <= 0 then continue end
 
-            local headPos = (head or hrp).Position
-            local footPos = hrp.Position - Vector3.new(0, 3, 0)
-            local hScr, onScr = Camera:WorldToViewportPoint(headPos + Vector3.new(0, 0.5, 0))
-            local fScr, _ = Camera:WorldToViewportPoint(footPos)
-
-            if not onScr then
+            -- Calcula bounding box do personagem grudado
+            local mins, maxs = Vector3.new(9e9,9e9,9e9), Vector3.new(-9e9,-9e9,-9e9)
+            local bodyParts = {"Head","Torso","HumanoidRootPart","Left Arm","Right Arm","Left Leg","Right Leg",
+                              "UpperTorso","LowerTorso","LeftUpperArm","RightUpperArm","LeftLowerArm","RightLowerArm",
+                              "LeftUpperLeg","RightUpperLeg","LeftLowerLeg","RightLowerLeg","LeftHand","RightHand","LeftFoot","RightFoot"}
+            local countParts = 0
+            for _, n in ipairs(bodyParts) do
+                local p = char:FindFirstChild(n)
+                if p and p:IsA("BasePart") then
+                    local cf = p.CFrame
+                    local sz = p.Size/2
+                    for dx = -1, 1, 2 do
+                        for dy = -1, 1, 2 do
+                            for dz = -1, 1, 2 do
+                                local w = cf * CFrame.new(sz.X*dx, sz.Y*dy, sz.Z*dz)
+                                mins = Vector3.new(math.min(mins.X, w.X), math.min(mins.Y, w.Y), math.min(mins.Z, w.Z))
+                                maxs = Vector3.new(math.max(maxs.X, w.X), math.max(maxs.Y, w.Y), math.max(maxs.Z, w.Z))
+                            end
+                        end
+                    end
+                    countParts = countParts + 1
+                end
+            end
+            if countParts == 0 then
+                -- Sem partes visiveis, tenta usar HumanoidRootPart
+                if hrp then
+                    mins = hrp.Position - Vector3.new(2, 5, 2)
+                    maxs = hrp.Position + Vector3.new(2, 5, 2)
+                else
+                    if espD[plr] then
+                        for _, d in pairs(espD[plr]) do pcall(function() d.Visible = false end) end
+                    end
+                    continue
+                end
+            end
+            local c1 = Camera:WorldToViewportPoint(Vector3.new(mins.X, maxs.Y, mins.Z))
+            local c2 = Camera:WorldToViewportPoint(Vector3.new(maxs.X, mins.Y, maxs.Z))
+            -- Se o player ta atras da camera ou fora da tela, esconde
+            if c1.Z < 0 and c2.Z < 0 then
                 if espD[plr] then
                     for _, d in pairs(espD[plr]) do pcall(function() d.Visible = false end) end
                 end
                 continue
             end
-
-            local cx = hScr.X
-            local boxH = math.max(fScr.Y - hScr.Y, 20)
-            local boxW = boxH * 0.45
+            -- Limita valores para evitar caixas gigantes
+            local bx = math.clamp(c1.X, -50, vp.X + 50)
+            local by = math.clamp(c1.Y, -50, vp.Y + 50)
+            local bx2 = math.clamp(c2.X, -50, vp.X + 50)
+            local by2 = math.clamp(c2.Y, -50, vp.Y + 50)
+            local cx = (bx + bx2) / 2
+            local topY = math.min(by, by2)
+            local botY = math.max(by, by2)
+            local ht = botY - topY
+            local wd = math.abs(bx2 - bx)
+            -- Ajuste minimo
+            ht = math.max(ht, 15)
+            wd = math.max(wd, 10)
 
             if not espD[plr] then
                 local b = criarDrawing("Square"); if b then b.Filled = false b.Thickness = 1.2 end
@@ -148,33 +198,38 @@ local function espLigar()
                 local hfl = criarDrawing("Square"); if hfl then hfl.Filled = true end
                 local dt = criarDrawing("Text"); if dt then dt.Size = 13 dt.Center = true dt.Outline = true end
                 local nm = criarDrawing("Text"); if nm then nm.Size = 12 nm.Center = true nm.Outline = true end
-                espD[plr] = {box=b, tc=tc, tb=tb, hbg=hbg, hfl=hfl, distTxt=dt, nomeTxt=nm}
+                -- Skeleton lines (10 linhas para esqueleto realista)
+                local sk = {}
+                for _ = 1, 10 do
+                    local l = criarDrawing("Line")
+                    if l then l.Thickness = 2 end
+                    sk[#sk+1] = l
+                end
+                espD[plr] = {box=b, tc=tc, tb=tb, hbg=hbg, hfl=hfl, distTxt=dt, nomeTxt=nm, skeleton=sk}
             end
 
             local o = espD[plr]
             local c = esp.cor
-            local topY = hScr.Y; local botY = fScr.Y; local ht = boxH; local wd = boxW
-            local midY = topY + ht/2
 
-            -- BOX
+            -- BOX (grudado no personagem)
             if esp.box and o.box then
                 o.box.Visible = true; o.box.Color = c
                 o.box.Position = Vector2.new(cx - wd/2, topY); o.box.Size = Vector2.new(wd, ht)
             elseif o.box then o.box.Visible = false end
 
-            -- TRACER CIMA
+            -- TRACER CIMA (do centro da tela ate o centro do boneco)
             if esp.tracerCima and o.tc then
                 o.tc.Visible = true; o.tc.Color = c
-                o.tc.From = Vector2.new(vp.X/2, 0); o.tc.To = Vector2.new(cx, midY)
+                o.tc.From = Vector2.new(vp.X/2, 0); o.tc.To = Vector2.new(cx, (topY+botY)/2)
             elseif o.tc then o.tc.Visible = false end
 
-            -- TRACER BAIXO
+            -- TRACER BAIXO (do centro da tela ate o pe do boneco)
             if esp.tracerBaixo and o.tb then
                 o.tb.Visible = true; o.tb.Color = c
-                o.tb.From = Vector2.new(vp.X/2, vp.Y); o.tb.To = Vector2.new(cx, midY)
+                o.tb.From = Vector2.new(vp.X/2, vp.Y); o.tb.To = Vector2.new(cx, botY)
             elseif o.tb then o.tb.Visible = false end
 
-            -- VIDA BARRA
+            -- VIDA BARRA (na lateral da box)
             if esp.vidaBarra and o.hbg and o.hfl then
                 local bw = 4; local bx = cx + wd/2 + 2
                 o.hbg.Visible = true; o.hbg.Color = Color3.fromRGB(30,30,30)
@@ -188,21 +243,60 @@ local function espLigar()
                 if o.hbg then o.hbg.Visible = false end; if o.hfl then o.hfl.Visible = false end
             end
 
-            -- DISTANCIA
+            -- DISTANCIA (acima da box)
             if esp.dist and o.distTxt then
                 o.distTxt.Visible = true
                 local myHrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
                 local dist = myHrp and (hrp.Position - myHrp.Position).Magnitude or 0
-                o.distTxt.Position = Vector2.new(cx, topY - 20)
+                o.distTxt.Position = Vector2.new(cx, topY - 18)
                 o.distTxt.Text = tostring(math.floor(dist)).."m"; o.distTxt.Color = c
             elseif o.distTxt then o.distTxt.Visible = false end
 
-            -- NOME
+            -- NOME (abaixo da box)
             if esp.nome and o.nomeTxt then
                 o.nomeTxt.Visible = true
                 o.nomeTxt.Position = Vector2.new(cx, botY + 4)
                 o.nomeTxt.Text = plr.Name; o.nomeTxt.Color = c
             elseif o.nomeTxt then o.nomeTxt.Visible = false end
+            
+            -- ESQUELETO (R6 e R15) - realista com 8 linhas
+            if esp.esqueleto and o.skeleton then
+                for _, l in pairs(o.skeleton) do
+                    l.Visible = true; l.Color = c; l.Thickness = 2
+                end
+                local function fp(n)
+                    local p = char:FindFirstChild(n)
+                    if p and p:IsA("BasePart") then return p end
+                    return nil
+                end
+                local head = fp("Head")
+                local torso = fp("Torso") or fp("UpperTorso")
+                local lowerTorso = fp("LowerTorso") or fp("Torso")
+                local la = fp("Left Arm") or fp("LeftUpperArm")
+                local ll = fp("Left Leg") or fp("LeftUpperLeg")
+                local rl = fp("Right Leg") or fp("RightUpperLeg")
+                local ra = fp("Right Arm") or fp("RightUpperArm")
+                local la2 = fp("LeftLowerArm") or fp("Left Arm")
+                local ra2 = fp("RightLowerArm") or fp("Right Arm")
+                local ll2 = fp("LeftLowerLeg") or fp("Left Leg")
+                local rl2 = fp("RightLowerLeg") or fp("Right Leg")
+                local joints = {
+                    {head, torso}, {torso, lowerTorso},
+                    {torso, la}, {la, la2}, {torso, ra}, {ra, ra2},
+                    {lowerTorso, ll}, {ll, ll2}, {lowerTorso, rl}, {rl, rl2},
+                }
+                for i, pair in ipairs(joints) do
+                    local p1, p2 = pair[1], pair[2]
+                    if p1 and p2 and o.skeleton[i] then
+                        local s1 = Camera:WorldToViewportPoint(p1.Position)
+                        local s2 = Camera:WorldToViewportPoint(p2.Position)
+                        o.skeleton[i].From = Vector2.new(s1.X, s1.Y)
+                        o.skeleton[i].To = Vector2.new(s2.X, s2.Y)
+                    end
+                end
+            elseif o.skeleton then
+                for _, l in pairs(o.skeleton) do l.Visible = false end
+            end
         end
     end)
 end
@@ -352,8 +446,6 @@ local function setupAlways()
     end
 end
 
-
-
 -- Noclip
 local function toggleNoclip(on)
     if noclipConn then noclipConn:Disconnect(); noclipConn = nil end
@@ -396,6 +488,45 @@ local function toggleSpin(on)
     end)
 end
 
+-- GOTO functions
+local function teleportToPlayer(plr)
+    if not plr then return end
+    local char = plr.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    -- Aparece do lado da pessoa (offset aleatorio)
+    local offset = Vector3.new(math.random(-3, 3), 0, math.random(-3, 3))
+    while offset.Magnitude < 2 do offset = Vector3.new(math.random(-3, 3), 0, math.random(-3, 3)) end
+    local targetPos = hrp.Position + offset
+    tp(targetPos)
+end
+
+local function toggleGotoLoop(on, plr)
+    if gotoLoopConn then gotoLoopConn:Disconnect(); gotoLoopConn = nil end
+    gotoLoopOn = on and plr ~= nil
+    if not gotoLoopOn then return end
+    gotoLoopConn = RunService.RenderStepped:Connect(function()
+        if not gotoLoopOn or not plr then return end
+        local char = plr.Character
+        if not char then return end
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+        local myChar = player.Character
+        if not myChar then return end
+        local myHrp = myChar:FindFirstChild("HumanoidRootPart")
+        if not myHrp then return end
+        local dist = (hrp.Position - myHrp.Position).Magnitude
+        if dist > 3 then
+            -- Aparece do lado da pessoa
+            local offset = Vector3.new(math.random(-3, 3), 0, math.random(-3, 3))
+            while offset.Magnitude < 2 do offset = Vector3.new(math.random(-3, 3), 0, math.random(-3, 3)) end
+            tp(hrp.Position + offset)
+        end
+    end)
+end
+
+-- Waypoint functions
 -- Server Hop
 local function serverHop()
     local http = game:GetService("HttpService")
@@ -411,52 +542,153 @@ local function serverHop()
     end
 end
 
--- Rejoin
-local function rejoin()
-    local ts = game:GetService("TeleportService")
-    ts:Teleport(game.PlaceId, player)
-end
-
 -- ============================================================
 --  UI
 -- ============================================================
+-- Notificacao de confirmacao para copiar nick (reutiliza o notif existente, mas com outra logica)
+local notifCopy = nil
+local function criarNotifConfirmacao()
+    if notifCopy and notifCopy.Parent then return end
+    notifCopy = Instance.new("Frame")
+    notifCopy.Size = UDim2.new(0, 220, 0, 95)
+    notifCopy.Position = UDim2.new(0.5, -110, 0, -105)
+    notifCopy.BackgroundColor3 = Color3.fromRGB(12, 8, 24)
+    notifCopy.BackgroundTransparency = 0.05
+    notifCopy.BorderSizePixel = 0
+    notifCopy.Visible = false
+    notifCopy.Parent = gui
+    Instance.new("UICorner", notifCopy).CornerRadius = UDim.new(0, 20)
+    local ni = Instance.new("TextLabel", notifCopy)
+    ni.Size = UDim2.new(0, 26, 0, 26); ni.Position = UDim2.new(0, 12, 0.3, -13)
+    ni.BackgroundTransparency = 1; ni.Text = "@"; ni.TextSize = 22; ni.TextColor3 = cor.roxoC
+    local nt = Instance.new("TextLabel", notifCopy)
+    nt.Size = UDim2.new(1, -50, 0, 18); nt.Position = UDim2.new(0, 44, 0, 8)
+    nt.BackgroundTransparency = 1; nt.Text = "Copiar Nick"; nt.TextColor3 = cor.branco
+    nt.TextSize = 12; nt.Font = Enum.Font.GothamBlack; nt.TextXAlignment = Enum.TextXAlignment.Left
+    local ns = Instance.new("TextLabel", notifCopy)
+    ns.Size = UDim2.new(1, -50, 0, 14); ns.Position = UDim2.new(0, 44, 0, 28)
+    ns.BackgroundTransparency = 1; ns.Text = ""; ns.TextColor3 = cor.cinza
+    ns.TextSize = 9; ns.Font = Enum.Font.Gotham; ns.TextXAlignment = Enum.TextXAlignment.Left
+    local ba = Instance.new("TextButton", notifCopy)
+    ba.Size = UDim2.new(0, 92, 0, 28); ba.Position = UDim2.new(0.05, 0, 1, -36)
+    ba.BackgroundColor3 = cor.verde; ba.BackgroundTransparency = 0.12; ba.Text = "SIM"
+    ba.TextColor3 = cor.branco; ba.TextSize = 11; ba.Font = Enum.Font.GothamBlack
+    Instance.new("UICorner", ba).CornerRadius = UDim.new(0, 14)
+    local bd = Instance.new("TextButton", notifCopy)
+    bd.Size = UDim2.new(0, 92, 0, 28); bd.Position = UDim2.new(0.52, 0, 1, -36)
+    bd.BackgroundColor3 = cor.vermelho; bd.BackgroundTransparency = 0.12; bd.Text = "NAO"
+    bd.TextColor3 = cor.branco; bd.TextSize = 11; bd.Font = Enum.Font.GothamBlack
+    Instance.new("UICorner", bd).CornerRadius = UDim.new(0, 14)
+    local resolveNome = nil
+    ba.MouseButton1Click:Connect(function()
+        if resolveNome then
+            -- Preenche o input do goto com o nick
+            local inp = telaGOTO and telaGOTO:FindFirstChild("gotoNomeInput", true)
+            if inp and inp:IsA("TextBox") then
+                inp.Text = resolveNome
+            end
+        end
+        notifCopy.Visible = false
+        notifCopy.Position = UDim2.new(0.5, -110, 0, -105)
+    end)
+    bd.MouseButton1Click:Connect(function()
+        notifCopy.Visible = false
+        notifCopy.Position = UDim2.new(0.5, -110, 0, -105)
+    end)
+    return {frame = notifCopy, sim = ba, nao = bd, nomeLabel = ns, setNome = function(n)
+        resolveNome = n; ns.Text = n
+    end, show = function()
+        notifCopy.Visible = true
+        ts:Create(notifCopy, TweenInfo.new(0.25, Enum.EasingStyle.Back), {Position = UDim2.new(0.5, -110, 0, 30)}):Play()
+    end}
+end
+
+local function setupCopyClickDetector()
+    -- Detecta cliques em players e mostra notificacao
+    local clickData = {}
+    uis.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 then
+            local m = uis:GetMouseLocation()
+            local r = Camera:ViewportPointToRay(m.X, m.Y)
+            local params = RaycastParams.new()
+            params.FilterType = Enum.RaycastFilterType.Blacklist
+            params.FilterDescendantsInstances = {player.Character or {}}
+            local res = workspace:Raycast(r.Origin, r.Direction * 500, params)
+            if res and res.Instance then
+                local hit = res.Instance
+                local plrHit = nil
+                for _, p in pairs(game.Players:GetPlayers()) do
+                    if p == player then continue end
+                    local char = p.Character
+                    if char and hit:IsDescendantOf(char) then
+                        plrHit = p
+                        break
+                    end
+                end
+                if plrHit then
+                    local name = plrHit.Name
+                    clickData[name] = (clickData[name] or 0) + 1
+                    if clickData[name] >= copyClickThreshold then
+                        clickData[name] = 0
+                        -- Mostra notificacao
+                        local copyNotif = criarNotifConfirmacao()
+                        copyNotif.setNome(name)
+                        copyNotif.show()
+                    end
+                end
+            end
+        end
+    end)
+end
+
 local function criarUI()
     if st.ui then return end
     st.ui=true
 
     gui=Instance.new("ScreenGui") gui.Name="RatHub" gui.ResetOnSpawn=false gui.Parent=player:WaitForChild("PlayerGui")
 
-    main=Instance.new("Frame") main.Size=UDim2.new(0,200,0,280) main.Position=UDim2.new(0.5,-100,0.5,-140)
-    main.BackgroundColor3=cor.fundo main.BackgroundTransparency=0.1 main.Active=true main.Draggable=true main.ClipsDescendants=true main.Parent=gui
-    Instance.new("UIStroke",main).Color=cor.roxo Instance.new("UIStroke",main).Transparency=0.4 Instance.new("UIStroke",main).Thickness=1.5
-    Instance.new("UICorner",main).CornerRadius=UDim.new(0,14)
-    local gr=Instance.new("UIGradient",main) gr.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,cor.fundo),ColorSequenceKeypoint.new(0.5,Color3.fromRGB(12,3,30)),ColorSequenceKeypoint.new(1,cor.fundo)}) gr.Rotation=45
-    local bordaGlow=Instance.new("UIStroke",main) bordaGlow.Color=cor.ciano bordaGlow.Transparency=0.85 bordaGlow.Thickness=5
+    main=Instance.new("Frame") main.Size=UDim2.new(0,220,0,300) main.Position=UDim2.new(0.5,-110,0.5,-150)
+    main.BackgroundColor3=cor.fundo main.BackgroundTransparency=0.05 main.Active=true main.Draggable=true main.ClipsDescendants=true main.Parent=gui
+    Instance.new("UIStroke",main).Color=cor.roxo Instance.new("UIStroke",main).Transparency=0.3 Instance.new("UIStroke",main).Thickness=1.5
+    Instance.new("UICorner",main).CornerRadius=UDim.new(0,16)
+    local gr=Instance.new("UIGradient",main) gr.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,cor.roxoE),ColorSequenceKeypoint.new(0.5,cor.fundo),ColorSequenceKeypoint.new(1,cor.roxoE)}) gr.Rotation=45
+    local bordaGlow=Instance.new("UIStroke",main) bordaGlow.Color=cor.roxoC bordaGlow.Transparency=0.75 bordaGlow.Thickness=6
     task.spawn(function()local up=true while bordaGlow and bordaGlow.Parent do if up then bordaGlow.Transparency=bordaGlow.Transparency+0.01 if bordaGlow.Transparency>=0.92 then up=false end else bordaGlow.Transparency=bordaGlow.Transparency-0.01 if bordaGlow.Transparency<=0.78 then up=true end end task.wait(0.03)end end)
 
-    local hd=Instance.new("Frame",main) hd.Size=UDim2.new(1,0,0,34) hd.BackgroundColor3=cor.roxoE hd.BackgroundTransparency=0.15
-    Instance.new("UICorner",hd).CornerRadius=UDim.new(0,14,0,0)
+    local hd=Instance.new("Frame",main) hd.Size=UDim2.new(1,0,0,34) hd.BackgroundColor3=cor.roxoE hd.BackgroundTransparency=0.1
+    Instance.new("UICorner",hd).CornerRadius=UDim.new(0,16,0,0)
     local hdGrad=Instance.new("UIGradient",hd) hdGrad.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,cor.roxoE),ColorSequenceKeypoint.new(0.5,cor.roxo),ColorSequenceKeypoint.new(1,cor.roxoE)}) hdGrad.Rotation=90
-    local tt=Instance.new("TextLabel",hd) tt.Size=UDim2.new(1,-65,1,0) tt.Position=UDim2.new(0,8,0,0)
-    tt.BackgroundTransparency=1 tt.Text="APEX HUB" tt.TextColor3=cor.branco tt.TextSize=13 tt.Font=Enum.Font.GothamBlack tt.TextXAlignment=Enum.TextXAlignment.Left tt.TextYAlignment=Enum.TextYAlignment.Center
-    local ttStroke=Instance.new("UIStroke",tt) ttStroke.Color=Color3.fromRGB(0,0,0) ttStroke.Thickness=2.5 ttStroke.Transparency=0.2
+    Instance.new("UIStroke",hd).Color=cor.roxoC Instance.new("UIStroke",hd).Transparency=0.6 Instance.new("UIStroke",hd).Thickness=1
+    local tt=Instance.new("TextLabel",hd) tt.Size=UDim2.new(1,-65,1,0) tt.Position=UDim2.new(0,10,0,0)
+    tt.BackgroundTransparency=1 tt.Text="⚡ APEX HUB" tt.TextColor3=cor.branco tt.TextSize=14 tt.Font=Enum.Font.GothamBlack tt.TextXAlignment=Enum.TextXAlignment.Left tt.TextYAlignment=Enum.TextYAlignment.Center
+    local ttStroke=Instance.new("UIStroke",tt) ttStroke.Color=cor.roxo ttStroke.Thickness=1.5 ttStroke.Transparency=0.1
     local btnCfg=Instance.new("TextButton",hd) btnCfg.Size=UDim2.new(0,20,0,20) btnCfg.Position=UDim2.new(1,-50,0.5,-10)
     btnCfg.BackgroundTransparency=1 btnCfg.Text="c" btnCfg.TextColor3=cor.cinza btnCfg.TextSize=14 btnCfg.Font=Enum.Font.GothamBold
     local btnMin=Instance.new("TextButton",hd) btnMin.Size=UDim2.new(0,20,0,20) btnMin.Position=UDim2.new(1,-24,0.5,-10)
     btnMin.BackgroundTransparency=1 btnMin.Text="-" btnMin.TextColor3=cor.branco btnMin.TextSize=16 btnMin.Font=Enum.Font.GothamBold
 
-    local barraAbas=Instance.new("Frame",main) barraAbas.Size=UDim2.new(1,0,0,26) barraAbas.Position=UDim2.new(0,0,0,34) barraAbas.BackgroundTransparency=1
-    local abaHome=Instance.new("TextButton",barraAbas) abaHome.Size=UDim2.new(0.33,-2,0,20) abaHome.Position=UDim2.new(0.01,0,0,3)
-    abaHome.BackgroundColor3=cor.roxo abaHome.BackgroundTransparency=0.1 abaHome.Text="HOME" abaHome.TextColor3=cor.branco abaHome.TextSize=10 abaHome.Font=Enum.Font.GothamBlack
-    Instance.new("UICorner",abaHome).CornerRadius=UDim.new(0,6)
-    local abaESP=Instance.new("TextButton",barraAbas) abaESP.Size=UDim2.new(0.33,-2,0,20) abaESP.Position=UDim2.new(0.34,1,0,3)
-    abaESP.BackgroundColor3=cor.roxoE abaESP.BackgroundTransparency=0.2 abaESP.Text="ESP" abaESP.TextColor3=cor.branco abaESP.TextSize=10 abaESP.Font=Enum.Font.GothamBlack
-    Instance.new("UICorner",abaESP).CornerRadius=UDim.new(0,6)
-    local abaPLAYER=Instance.new("TextButton",barraAbas) abaPLAYER.Size=UDim2.new(0.33,-2,0,20) abaPLAYER.Position=UDim2.new(0.67,-1,0,3)
-    abaPLAYER.BackgroundColor3=cor.roxoE abaPLAYER.BackgroundTransparency=0.25 abaPLAYER.Text="PLAYER" abaPLAYER.TextColor3=cor.branco abaPLAYER.TextSize=10 abaPLAYER.Font=Enum.Font.GothamBlack
-    Instance.new("UICorner",abaPLAYER).CornerRadius=UDim.new(0,6)
+    local barraAbas=Instance.new("ScrollingFrame",main) barraAbas.Size=UDim2.new(1,0,0,26) barraAbas.Position=UDim2.new(0,0,0,34) barraAbas.BackgroundTransparency=1 barraAbas.ScrollBarThickness=0 barraAbas.BorderSizePixel=0 barraAbas.ScrollingDirection=Enum.ScrollingDirection.X barraAbas.ScrollingEnabled=true barraAbas.CanvasSize=UDim2.new(0,450,0,0)
+    local layAbas=Instance.new("UIListLayout",barraAbas) layAbas.FillDirection=Enum.FillDirection.Horizontal layAbas.Padding=UDim.new(0,2) layAbas.VerticalAlignment=Enum.VerticalAlignment.Center
+    local padAbas=Instance.new("UIPadding",barraAbas) padAbas.PaddingTop=UDim.new(0,2)
+    local abaHOME=Instance.new("TextButton",barraAbas) abaHOME.Size=UDim2.new(0,58,0,22) abaHOME.BackgroundColor3=cor.roxo abaHOME.BackgroundTransparency=0.1 abaHOME.Text="HOME" abaHOME.TextColor3=cor.branco abaHOME.TextSize=10 abaHOME.Font=Enum.Font.GothamBlack
+    Instance.new("UICorner",abaHOME).CornerRadius=UDim.new(0,8)
+    local abaESP=Instance.new("TextButton",barraAbas) abaESP.Size=UDim2.new(0,58,0,22) abaESP.BackgroundColor3=cor.roxoE abaESP.BackgroundTransparency=0.15 abaESP.Text="ESP" abaESP.TextColor3=cor.branco abaESP.TextSize=10 abaESP.Font=Enum.Font.GothamBlack
+    Instance.new("UICorner",abaESP).CornerRadius=UDim.new(0,8)
+    Instance.new("UIStroke",abaESP).Color=cor.roxo Instance.new("UIStroke",abaESP).Transparency=0.7 Instance.new("UIStroke",abaESP).Thickness=1
+    local abaPLAYER=Instance.new("TextButton",barraAbas) abaPLAYER.Size=UDim2.new(0,58,0,22) abaPLAYER.BackgroundColor3=cor.roxoE abaPLAYER.BackgroundTransparency=0.15 abaPLAYER.Text="PLAYER" abaPLAYER.TextColor3=cor.branco abaPLAYER.TextSize=10 abaPLAYER.Font=Enum.Font.GothamBlack
+    Instance.new("UICorner",abaPLAYER).CornerRadius=UDim.new(0,8)
+    Instance.new("UIStroke",abaPLAYER).Color=cor.roxo Instance.new("UIStroke",abaPLAYER).Transparency=0.7 Instance.new("UIStroke",abaPLAYER).Thickness=1
+    local abaVIEW=Instance.new("TextButton",barraAbas) abaVIEW.Size=UDim2.new(0,58,0,22) abaVIEW.BackgroundColor3=cor.roxoE abaVIEW.BackgroundTransparency=0.15 abaVIEW.Text="VIEW" abaVIEW.TextColor3=cor.branco abaVIEW.TextSize=10 abaVIEW.Font=Enum.Font.GothamBlack
+    Instance.new("UICorner",abaVIEW).CornerRadius=UDim.new(0,8)
+    Instance.new("UIStroke",abaVIEW).Color=cor.roxo Instance.new("UIStroke",abaVIEW).Transparency=0.7 Instance.new("UIStroke",abaVIEW).Thickness=1
+    local abaGOTO=Instance.new("TextButton",barraAbas) abaGOTO.Size=UDim2.new(0,58,0,22) abaGOTO.BackgroundColor3=cor.roxoE abaGOTO.BackgroundTransparency=0.15 abaGOTO.Text="GOTO" abaGOTO.TextColor3=cor.branco abaGOTO.TextSize=10 abaGOTO.Font=Enum.Font.GothamBlack
+    Instance.new("UICorner",abaGOTO).CornerRadius=UDim.new(0,8)
+    Instance.new("UIStroke",abaGOTO).Color=cor.roxo Instance.new("UIStroke",abaGOTO).Transparency=0.7 Instance.new("UIStroke",abaGOTO).Thickness=1
+    local abaVISUAL=Instance.new("TextButton",barraAbas) abaVISUAL.Size=UDim2.new(0,58,0,22) abaVISUAL.BackgroundColor3=cor.roxoE abaVISUAL.BackgroundTransparency=0.15 abaVISUAL.Text="VISUAL" abaVISUAL.TextColor3=cor.branco abaVISUAL.TextSize=10 abaVISUAL.Font=Enum.Font.GothamBlack
+    Instance.new("UICorner",abaVISUAL).CornerRadius=UDim.new(0,8)
+    Instance.new("UIStroke",abaVISUAL).Color=cor.roxo Instance.new("UIStroke",abaVISUAL).Transparency=0.7 Instance.new("UIStroke",abaVISUAL).Thickness=1
 
-    local contentY=34+26; local contentH=280-contentY
+    local contentY=34+26; local contentH=300-contentY
 
     -- HOME
     telaHOME=Instance.new("ScrollingFrame",main) telaHOME.Size=UDim2.new(1,0,0,contentH) telaHOME.Position=UDim2.new(0,0,0,contentY) telaHOME.BackgroundTransparency=1 telaHOME.ScrollBarThickness=3 telaHOME.ScrollBarImageColor3=cor.roxo telaHOME.BorderSizePixel=0
@@ -473,7 +705,7 @@ local function criarUI()
     tpBtn=Instance.new("TextButton",telaHOME) tpBtn.Size=UDim2.new(0.88,0,0,34) tpBtn.BackgroundColor3=cor.roxoE tpBtn.BackgroundTransparency=0.25 tpBtn.Text="TP BRUTO" tpBtn.TextColor3=cor.branco tpBtn.TextSize=12 tpBtn.Font=Enum.Font.GothamBlack tpBtn.Visible=false
     Instance.new("UICorner",tpBtn).CornerRadius=UDim.new(0,9) Instance.new("UIStroke",tpBtn).Color=cor.roxo Instance.new("UIStroke",tpBtn).Transparency=0.7
 
-    -- PLAYER
+    -- ESP
     telaPLAYER=Instance.new("ScrollingFrame",main) telaPLAYER.Size=UDim2.new(1,0,0,contentH) telaPLAYER.Position=UDim2.new(0,0,0,contentY) telaPLAYER.BackgroundTransparency=1 telaPLAYER.ScrollBarThickness=3 telaPLAYER.ScrollBarImageColor3=cor.roxo telaPLAYER.BorderSizePixel=0 telaPLAYER.Visible=false
     local layP=Instance.new("UIListLayout",telaPLAYER) layP.Padding=UDim.new(0,5) layP.HorizontalAlignment=Enum.HorizontalAlignment.Center
     local padP=Instance.new("UIPadding",telaPLAYER) padP.PaddingTop=UDim.new(0,8) padP.PaddingBottom=UDim.new(0,6)
@@ -607,6 +839,331 @@ local function criarUI()
     rjBtn.MouseLeave:Connect(function() ts:Create(rjBtn,TweenInfo.new(0.1),{Size=UDim2.new(0.88,0,0,28),BackgroundColor3=cor.roxo,BackgroundTransparency=0.15}):Play() end)
     rjBtn.MouseButton1Click:Connect(rejoin)
 
+    -- VISUAL
+    telaVISUAL=Instance.new("ScrollingFrame",main) telaVISUAL.Size=UDim2.new(1,0,0,contentH) telaVISUAL.Position=UDim2.new(0,0,0,contentY) telaVISUAL.BackgroundTransparency=1 telaVISUAL.ScrollBarThickness=3 telaVISUAL.ScrollBarImageColor3=cor.roxo telaVISUAL.BorderSizePixel=0 telaVISUAL.Visible=false
+    local layV=Instance.new("UIListLayout",telaVISUAL) layV.Padding=UDim.new(0,6) layV.HorizontalAlignment=Enum.HorizontalAlignment.Center
+    local padV=Instance.new("UIPadding",telaVISUAL) padV.PaddingTop=UDim.new(0,8) padV.PaddingBottom=UDim.new(0,6)
+    
+    -- FULL BRIGHT
+    local fbBtn=Instance.new("TextButton",telaVISUAL) fbBtn.Size=UDim2.new(0.88,0,0,28) fbBtn.BackgroundColor3=cor.roxoE fbBtn.BackgroundTransparency=0.2 fbBtn.Text="FULL BRIGHT" fbBtn.TextColor3=cor.branco fbBtn.TextSize=9 fbBtn.Font=Enum.Font.GothamBlack fbBtn.TextStrokeColor3=Color3.fromRGB(0,0,0) fbBtn.TextStrokeTransparency=0.2
+    Instance.new("UICorner",fbBtn).CornerRadius=UDim.new(0,6)
+    fbBtn.MouseEnter:Connect(function() ts:Create(fbBtn,TweenInfo.new(0.08),{Size=UDim2.new(0.9,0,0,30),BackgroundColor3=cor.ciano,BackgroundTransparency=0.1}):Play() end)
+    fbBtn.MouseLeave:Connect(function() ts:Create(fbBtn,TweenInfo.new(0.1),{Size=UDim2.new(0.88,0,0,28),BackgroundColor3=cor.roxoE,BackgroundTransparency=0.2}):Play() end)
+    local fbOn=false
+    fbBtn.MouseButton1Click:Connect(function()
+        fbOn=not fbOn
+        local lig=game:GetService("Lighting")
+        if fbOn then
+            lig.Brightness=0.5; lig.OutdoorAmbient=Color3.new(0.3,0.3,0.3); lig.Ambient=Color3.new(0.4,0.4,0.4); lig.GlobalShadows=false; lig.ClockTime=12
+            fbBtn.BackgroundColor3=cor.verde; fbBtn.Text="FULL BRIGHT ON"
+        else
+            lig.Brightness=1; lig.OutdoorAmbient=Color3.new(0.6,0.6,0.6); lig.Ambient=Color3.new(0.4,0.4,0.4); lig.GlobalShadows=true
+            fbBtn.BackgroundColor3=cor.roxoE; fbBtn.Text="FULL BRIGHT"
+        end
+    end)
+
+    -- NO FOG
+    local fogBtn=Instance.new("TextButton",telaVISUAL) fogBtn.Size=UDim2.new(0.88,0,0,28) fogBtn.BackgroundColor3=cor.roxoE fogBtn.BackgroundTransparency=0.2 fogBtn.Text="NO FOG" fogBtn.TextColor3=cor.branco fogBtn.TextSize=9 fogBtn.Font=Enum.Font.GothamBlack fogBtn.TextStrokeColor3=Color3.fromRGB(0,0,0) fogBtn.TextStrokeTransparency=0.2
+    Instance.new("UICorner",fogBtn).CornerRadius=UDim.new(0,6)
+    fogBtn.MouseEnter:Connect(function() ts:Create(fogBtn,TweenInfo.new(0.08),{Size=UDim2.new(0.9,0,0,30),BackgroundColor3=cor.ciano,BackgroundTransparency=0.1}):Play() end)
+    fogBtn.MouseLeave:Connect(function() ts:Create(fogBtn,TweenInfo.new(0.1),{Size=UDim2.new(0.88,0,0,28),BackgroundColor3=cor.roxoE,BackgroundTransparency=0.2}):Play() end)
+    local fogOn=false; local fogConn=nil; local fogChangedConn=nil
+    local function aplicarNoFog()
+        pcall(function()
+            local lig=game:GetService("Lighting")
+            lig.FogEnd=9e9; lig.FogStart=9e9
+            lig.FogColor=Color3.new(0.5,0.5,0.5)
+            local atmo=lig:FindFirstChildOfClass("Atmosphere")
+            if atmo then atmo.Enabled=false end
+        end)
+    end
+    local function resetarFog()
+        pcall(function()
+            local lig=game:GetService("Lighting")
+            lig.FogEnd=100000; lig.FogStart=0
+            local atmo=lig:FindFirstChildOfClass("Atmosphere")
+            if atmo then atmo.Enabled=true end
+        end)
+    end
+    fogBtn.MouseButton1Click:Connect(function()
+        fogOn=not fogOn
+        if fogOn then
+            local lig=game:GetService("Lighting")
+            aplicarNoFog()
+            fogConn=lig:GetPropertyChangedSignal("FogEnd"):Connect(aplicarNoFog)
+            fogChangedConn=lig:GetPropertyChangedSignal("FogStart"):Connect(aplicarNoFog)
+            fogBtn.BackgroundColor3=cor.verde; fogBtn.Text="NO FOG ON"
+        else
+            if fogConn then fogConn:Disconnect(); fogConn=nil end
+            if fogChangedConn then fogChangedConn:Disconnect(); fogChangedConn=nil end
+            resetarFog()
+            fogBtn.BackgroundColor3=cor.roxoE; fogBtn.Text="NO FOG"
+        end
+    end)
+
+    -- XRAY
+    local xrBtn=Instance.new("TextButton",telaVISUAL) xrBtn.Size=UDim2.new(0.88,0,0,28) xrBtn.BackgroundColor3=cor.roxoE xrBtn.BackgroundTransparency=0.2 xrBtn.Text="X-RAY" xrBtn.TextColor3=cor.branco xrBtn.TextSize=9 xrBtn.Font=Enum.Font.GothamBlack xrBtn.TextStrokeColor3=Color3.fromRGB(0,0,0) xrBtn.TextStrokeTransparency=0.2
+    Instance.new("UICorner",xrBtn).CornerRadius=UDim.new(0,6)
+    xrBtn.MouseEnter:Connect(function() ts:Create(xrBtn,TweenInfo.new(0.08),{Size=UDim2.new(0.9,0,0,30),BackgroundColor3=cor.ciano,BackgroundTransparency=0.1}):Play() end)
+    xrBtn.MouseLeave:Connect(function() ts:Create(xrBtn,TweenInfo.new(0.1),{Size=UDim2.new(0.88,0,0,28),BackgroundColor3=cor.roxoE,BackgroundTransparency=0.2}):Play() end)
+    local xrOn=false; local xrConn=nil
+    local function xrAplicar(t)
+        -- Ignora partes de players
+        local ignorar={}
+        for _,plr in pairs(game.Players:GetPlayers()) do
+            local char=plr.Character
+            if char then
+                for _,p in pairs(char:GetDescendants()) do
+                    if p:IsA("BasePart") then ignorar[p]=true end
+                end
+            end
+        end
+        -- Aplica em TUDO no workspace exceto players (paredes, chao, teto, etc)
+        for _,p in pairs(workspace:GetDescendants()) do
+            if p:IsA("BasePart") and not ignorar[p] then
+                p.LocalTransparencyModifier=t
+            end
+        end
+        -- Terrain (chao natural)
+        local ter = workspace:FindFirstChildOfClass("Terrain")
+        if ter then
+            ter.LocalTransparencyModifier=t
+        end
+    end
+    local function xrLoop()
+        xrConn=RunService.RenderStepped:Connect(function()
+            if not xrOn then return end
+            xrAplicar(0.9)
+        end)
+    end
+    xrBtn.MouseButton1Click:Connect(function()
+        xrOn=not xrOn
+        if xrOn then
+            xrAplicar(0.9)
+            xrLoop()
+            xrBtn.BackgroundColor3=cor.verde; xrBtn.Text="X-RAY ON"
+        else
+            if xrConn then xrConn:Disconnect(); xrConn=nil end
+            xrAplicar(0)
+            xrBtn.BackgroundColor3=cor.roxoE; xrBtn.Text="X-RAY"
+        end
+    end)
+
+    -- GOTO
+    telaGOTO=Instance.new("ScrollingFrame",main) telaGOTO.Size=UDim2.new(1,0,0,contentH) telaGOTO.Position=UDim2.new(0,0,0,contentY) telaGOTO.BackgroundTransparency=1 telaGOTO.ScrollBarThickness=3 telaGOTO.ScrollBarImageColor3=cor.roxo telaGOTO.BorderSizePixel=0 telaGOTO.Visible=false
+    local layG=Instance.new("UIListLayout",telaGOTO) layG.Padding=UDim.new(0,5) layG.HorizontalAlignment=Enum.HorizontalAlignment.Center
+    local padG=Instance.new("UIPadding",telaGOTO) padG.PaddingTop=UDim.new(0,8) padG.PaddingBottom=UDim.new(0,6)
+    
+    -- Input nome
+    local gotoLabel=Instance.new("TextLabel",telaGOTO) gotoLabel.Size=UDim2.new(0.88,0,0,14) gotoLabel.BackgroundTransparency=1 gotoLabel.Text="NICK DO JOGADOR" gotoLabel.TextColor3=cor.roxoC gotoLabel.TextSize=9 gotoLabel.Font=Enum.Font.GothamBold gotoLabel.TextStrokeColor3=Color3.fromRGB(0,0,0) gotoLabel.TextStrokeTransparency=0.2
+    
+    local gotoNomeInput=Instance.new("TextBox",telaGOTO) gotoNomeInput.Size=UDim2.new(0.88,0,0,26) gotoNomeInput.BackgroundColor3=Color3.fromRGB(25,15,45) gotoNomeInput.BackgroundTransparency=0.3 gotoNomeInput.Text="" gotoNomeInput.TextColor3=cor.branco gotoNomeInput.TextSize=10 gotoNomeInput.Font=Enum.Font.Gotham gotoNomeInput.PlaceholderText="nick do cara" gotoNomeInput.PlaceholderColor3=cor.cinza gotoNomeInput.ClearTextOnFocus=false gotoNomeInput.TextXAlignment=Enum.TextXAlignment.Center
+    Instance.new("UICorner",gotoNomeInput).CornerRadius=UDim.new(0,6)
+    
+    -- Avatar + info (sempre visivel)
+    local gotoAvatarFrame=Instance.new("Frame",telaGOTO) gotoAvatarFrame.Size=UDim2.new(0.88,0,0,160) gotoAvatarFrame.BackgroundTransparency=1
+    
+    local gotoAvatar=Instance.new("ImageLabel",gotoAvatarFrame) gotoAvatar.Size=UDim2.new(0, 100, 0, 150) gotoAvatar.Position=UDim2.new(0,5,0,5) gotoAvatar.BackgroundColor3=cor.roxoE gotoAvatar.BackgroundTransparency=0.2 gotoAvatar.Image="rbxasset://textures/ui/GuiImagePlaceholder.png" gotoAvatar.Visible=true gotoAvatar.ScaleType=Enum.ScaleType.Fit
+    Instance.new("UICorner",gotoAvatar).CornerRadius=UDim.new(0, 8)
+    local gotoNomeDisplay=Instance.new("TextLabel",gotoAvatarFrame) gotoNomeDisplay.Size=UDim2.new(1,-115,0,14) gotoNomeDisplay.Position=UDim2.new(0,112,0,75) gotoNomeDisplay.BackgroundTransparency=1 gotoNomeDisplay.Text="Nenhum jogador" gotoNomeDisplay.TextColor3=cor.cinza gotoNomeDisplay.TextSize=12 gotoNomeDisplay.Font=Enum.Font.GothamBold gotoNomeDisplay.TextXAlignment=Enum.TextXAlignment.Left gotoNomeDisplay.TextStrokeColor3=Color3.fromRGB(0,0,0) gotoNomeDisplay.TextStrokeTransparency=0.2
+    
+    -- Funcao para atualizar avatar e info quando digitar nick
+    local function atualizarGotoAlvo(nick)
+        if nick == "" then
+            gotoNomeDisplay.Text = "Digite um nick"
+            gotoNomeDisplay.TextColor3=cor.cinza
+            gotoAvatar.Image="rbxasset://textures/ui/GuiImagePlaceholder.png"
+            gotoAlvo = nil
+            return
+        end
+        local nickLow = nick:lower()
+        for _, plr in pairs(game.Players:GetPlayers()) do
+            local pName = plr.Name:lower()
+            local pDisp = plr.DisplayName and plr.DisplayName:lower() or ""
+            if pName:find(nickLow, 1, true) or (pDisp ~= "" and pDisp:find(nickLow, 1, true)) then
+                gotoAlvo = plr
+                gotoNomeDisplay.Text = plr.Name .. "  [" .. (plr.DisplayName or plr.Name) .. "]"
+                gotoNomeDisplay.TextColor3=cor.branco
+                -- Avatar thumbnail
+                pcall(function()
+                    local ok, url = pcall(function()
+                        return game:GetService("Players"):GetUserThumbnailAsync(plr.UserId, Enum.ThumbnailType.AvatarBust, Enum.ThumbnailSize.Size420x420)
+                    end)
+                    if ok then
+                        gotoAvatar.Image = url
+                    end
+                end)
+                gotoAvatar.Size = UDim2.new(0, 100, 0, 150)
+                gotoNomeDisplay.Position = UDim2.new(0, 112, 0, 75)
+                return
+            end
+        end
+        gotoNomeDisplay.Text = "Jogador nao encontrado"
+        gotoNomeDisplay.TextColor3=cor.vermelho
+        gotoAvatar.Image="rbxasset://textures/ui/GuiImagePlaceholder.png"
+        gotoAvatar.Size=UDim2.new(0, 100, 0, 150)
+        gotoAlvo = nil
+    end
+    
+    gotoNomeInput.FocusLost:Connect(function()
+        atualizarGotoAlvo(gotoNomeInput.Text)
+    end)
+    -- Auto-search while typing
+    gotoNomeInput:GetPropertyChangedSignal("Text"):Connect(function()
+        if #gotoNomeInput.Text >= 1 then
+            atualizarGotoAlvo(gotoNomeInput.Text)
+        else
+            gotoNomeDisplay.Text = "Digite um nick"
+            gotoNomeDisplay.TextColor3=cor.cinza
+            gotoAvatar.Image="rbxasset://textures/ui/GuiImagePlaceholder.png"
+            gotoAvatar.Size=UDim2.new(0, 100, 0, 150)
+            gotoAlvo = nil
+        end
+    end)
+    
+    -- GO TO + LOOP GO TO lado a lado
+    local gotoBtnFrame=Instance.new("Frame",telaGOTO) gotoBtnFrame.Size=UDim2.new(0.88,0,0,32) gotoBtnFrame.BackgroundTransparency=1
+    
+    local goBtn=Instance.new("TextButton",gotoBtnFrame) goBtn.Size=UDim2.new(0.48,0,0,30) goBtn.Position=UDim2.new(0,0,0,1) goBtn.BackgroundColor3=cor.roxo goBtn.BackgroundTransparency=0.15 goBtn.Text="GO TO" goBtn.TextColor3=cor.branco goBtn.TextSize=10 goBtn.Font=Enum.Font.GothamBlack goBtn.TextStrokeColor3=Color3.fromRGB(0,0,0) goBtn.TextStrokeTransparency=0.2
+    Instance.new("UICorner",goBtn).CornerRadius=UDim.new(0,8)
+    goBtn.MouseEnter:Connect(function() ts:Create(goBtn,TweenInfo.new(0.08),{Size=UDim2.new(0.5,0,0,32),BackgroundColor3=cor.ciano,BackgroundTransparency=0.05}):Play() end)
+    goBtn.MouseLeave:Connect(function() ts:Create(goBtn,TweenInfo.new(0.1),{Size=UDim2.new(0.48,0,0,30),BackgroundColor3=cor.roxo,BackgroundTransparency=0.15}):Play() end)
+    goBtn.MouseButton1Click:Connect(function()
+        if gotoAlvo then teleportToPlayer(gotoAlvo) end
+    end)
+    
+    local loopGoBtn=Instance.new("TextButton",gotoBtnFrame) loopGoBtn.Size=UDim2.new(0.48,0,0,30) loopGoBtn.Position=UDim2.new(0.52,0,0,1) loopGoBtn.BackgroundColor3=cor.roxoE loopGoBtn.BackgroundTransparency=0.2 loopGoBtn.Text="LOOP" loopGoBtn.TextColor3=cor.branco loopGoBtn.TextSize=10 loopGoBtn.Font=Enum.Font.GothamBlack loopGoBtn.TextStrokeColor3=Color3.fromRGB(0,0,0) loopGoBtn.TextStrokeTransparency=0.2
+    Instance.new("UICorner",loopGoBtn).CornerRadius=UDim.new(0,8)
+    loopGoBtn.MouseEnter:Connect(function() ts:Create(loopGoBtn,TweenInfo.new(0.08),{Size=UDim2.new(0.5,0,0,32),BackgroundColor3=cor.ciano,BackgroundTransparency=0.1}):Play() end)
+    loopGoBtn.MouseLeave:Connect(function() ts:Create(loopGoBtn,TweenInfo.new(0.1),{Size=UDim2.new(0.48,0,0,30),BackgroundColor3=gotoLoopOn and cor.verde or cor.roxoE,BackgroundTransparency=0.2}):Play() end)
+    loopGoBtn.MouseButton1Click:Connect(function()
+        if not gotoLoopOn and gotoAlvo then
+            toggleGotoLoop(true, gotoAlvo)
+            loopGoBtn.BackgroundColor3=cor.verde; loopGoBtn.Text="LOOP ON"
+        else
+            toggleGotoLoop(false)
+            loopGoBtn.BackgroundColor3=cor.roxoE; loopGoBtn.Text="LOOP"
+        end
+    end)
+
+    -- VIEW
+    telaVIEW=Instance.new("ScrollingFrame",main) telaVIEW.Size=UDim2.new(1,0,0,contentH) telaVIEW.Position=UDim2.new(0,0,0,contentY) telaVIEW.BackgroundTransparency=1 telaVIEW.ScrollBarThickness=3 telaVIEW.ScrollBarImageColor3=cor.roxo telaVIEW.BorderSizePixel=0 telaVIEW.Visible=false
+    local layVw=Instance.new("UIListLayout",telaVIEW) layVw.Padding=UDim.new(0,5) layVw.HorizontalAlignment=Enum.HorizontalAlignment.Center
+    local padVw=Instance.new("UIPadding",telaVIEW) padVw.PaddingTop=UDim.new(0,8) padVw.PaddingBottom=UDim.new(0,6)
+    
+    -- Input nome
+    local viewLabel=Instance.new("TextLabel",telaVIEW) viewLabel.Size=UDim2.new(0.88,0,0,14) viewLabel.BackgroundTransparency=1 viewLabel.Text="NICK DO JOGADOR" viewLabel.TextColor3=cor.roxoC viewLabel.TextSize=9 viewLabel.Font=Enum.Font.GothamBold viewLabel.TextStrokeColor3=Color3.fromRGB(0,0,0) viewLabel.TextStrokeTransparency=0.2
+    
+    local viewNomeInput=Instance.new("TextBox",telaVIEW) viewNomeInput.Size=UDim2.new(0.88,0,0,26) viewNomeInput.BackgroundColor3=Color3.fromRGB(25,15,45) viewNomeInput.BackgroundTransparency=0.3 viewNomeInput.Text="" viewNomeInput.TextColor3=cor.branco viewNomeInput.TextSize=10 viewNomeInput.Font=Enum.Font.Gotham viewNomeInput.PlaceholderText="nick do cara" viewNomeInput.PlaceholderColor3=cor.cinza viewNomeInput.ClearTextOnFocus=false viewNomeInput.TextXAlignment=Enum.TextXAlignment.Center
+    Instance.new("UICorner",viewNomeInput).CornerRadius=UDim.new(0,6)
+    
+    -- Avatar + info
+    local viewAvatarFrame=Instance.new("Frame",telaVIEW) viewAvatarFrame.Size=UDim2.new(0.88,0,0,160) viewAvatarFrame.BackgroundTransparency=1
+    
+    local viewAvatar=Instance.new("ImageLabel",viewAvatarFrame) viewAvatar.Size=UDim2.new(0, 100, 0, 150) viewAvatar.Position=UDim2.new(0,5,0,5) viewAvatar.BackgroundColor3=cor.roxoE viewAvatar.BackgroundTransparency=0.2 viewAvatar.Image="rbxasset://textures/ui/GuiImagePlaceholder.png" viewAvatar.Visible=true viewAvatar.ScaleType=Enum.ScaleType.Fit
+    Instance.new("UICorner",viewAvatar).CornerRadius=UDim.new(0, 8)
+    local viewNomeDisplay=Instance.new("TextLabel",viewAvatarFrame) viewNomeDisplay.Size=UDim2.new(1,-115,0,14) viewNomeDisplay.Position=UDim2.new(0,112,0,75) viewNomeDisplay.BackgroundTransparency=1 viewNomeDisplay.Text="Nenhum jogador" viewNomeDisplay.TextColor3=cor.cinza viewNomeDisplay.TextSize=12 viewNomeDisplay.Font=Enum.Font.GothamBold viewNomeDisplay.TextXAlignment=Enum.TextXAlignment.Left viewNomeDisplay.TextStrokeColor3=Color3.fromRGB(0,0,0) viewNomeDisplay.TextStrokeTransparency=0.2
+    
+    local function atualizarViewAlvo(nick)
+        if nick == "" then
+            viewNomeDisplay.Text = "Digite um nick"
+            viewNomeDisplay.TextColor3=cor.cinza
+            viewAvatar.Image="rbxasset://textures/ui/GuiImagePlaceholder.png"
+            viewAlvo = nil
+            if viewConn then viewConn:Disconnect(); viewConn = nil; viewOn = false end
+            return
+        end
+        local nickLow = nick:lower()
+        for _, plr in pairs(game.Players:GetPlayers()) do
+            local pName = plr.Name:lower()
+            local pDisp = plr.DisplayName and plr.DisplayName:lower() or ""
+            if pName:find(nickLow, 1, true) or (pDisp ~= "" and pDisp:find(nickLow, 1, true)) then
+                viewAlvo = plr
+                viewNomeDisplay.Text = plr.Name .. "  [" .. (plr.DisplayName or plr.Name) .. "]"
+                viewNomeDisplay.TextColor3=cor.branco
+                pcall(function()
+                    local ok, url = pcall(function()
+                        return game:GetService("Players"):GetUserThumbnailAsync(plr.UserId, Enum.ThumbnailType.AvatarBust, Enum.ThumbnailSize.Size420x420)
+                    end)
+                    if ok then viewAvatar.Image = url end
+                end)
+                viewAvatar.Size = UDim2.new(0, 100, 0, 150)
+                viewNomeDisplay.Position = UDim2.new(0, 110, 0.5, -7)
+                return
+            end
+        end
+        viewNomeDisplay.Text = "Jogador nao encontrado"
+        viewNomeDisplay.TextColor3=cor.vermelho
+        viewAvatar.Image="rbxasset://textures/ui/GuiImagePlaceholder.png"
+        viewAvatar.Size=UDim2.new(0, 100, 0, 150)
+        viewAlvo = nil
+        if viewConn then viewConn:Disconnect(); viewConn = nil; viewOn = false end
+        if viewHighlight then pcall(function() viewHighlight:Destroy() end); viewHighlight = nil end
+    end
+    
+    viewNomeInput.FocusLost:Connect(function()
+        atualizarViewAlvo(viewNomeInput.Text)
+    end)
+    viewNomeInput:GetPropertyChangedSignal("Text"):Connect(function()
+        if #viewNomeInput.Text >= 1 then
+            atualizarViewAlvo(viewNomeInput.Text)
+        else
+            viewNomeDisplay.Text = "Digite um nick"
+            viewNomeDisplay.TextColor3=cor.cinza
+            viewAvatar.Image="rbxasset://textures/ui/GuiImagePlaceholder.png"
+            viewAvatar.Size=UDim2.new(0, 100, 0, 150)
+            viewAlvo = nil
+            if viewConn then viewConn:Disconnect(); viewConn = nil; viewOn = false end
+            if viewHighlight then pcall(function() viewHighlight:Destroy() end); viewHighlight = nil end
+        end
+    end)
+    
+    -- VIEW toggle button
+    local viewBtn=Instance.new("TextButton",telaVIEW) viewBtn.Size=UDim2.new(0.88,0,0,30) viewBtn.BackgroundColor3=cor.roxoE viewBtn.BackgroundTransparency=0.2 viewBtn.Text="VIEW" viewBtn.TextColor3=cor.branco viewBtn.TextSize=10 viewBtn.Font=Enum.Font.GothamBlack viewBtn.TextStrokeColor3=Color3.fromRGB(0,0,0) viewBtn.TextStrokeTransparency=0.2
+    Instance.new("UICorner",viewBtn).CornerRadius=UDim.new(0,8)
+    viewBtn.MouseEnter:Connect(function() ts:Create(viewBtn,TweenInfo.new(0.08),{Size=UDim2.new(0.9,0,0,32),BackgroundColor3=cor.ciano,BackgroundTransparency=0.1}):Play() end)
+    viewBtn.MouseLeave:Connect(function() ts:Create(viewBtn,TweenInfo.new(0.1),{Size=UDim2.new(0.88,0,0,30),BackgroundColor3=viewOn and cor.verde or cor.roxoE,BackgroundTransparency=0.2}):Play() end)
+    viewBtn.MouseButton1Click:Connect(function()
+        if not viewOn and viewAlvo then
+            viewOn = true
+            -- Cria highlight na pessoa
+            if viewHighlight then pcall(function() viewHighlight:Destroy() end) end
+            viewHighlight = Instance.new("Highlight")
+            viewHighlight.FillColor = Color3.fromRGB(0, 255, 100)
+            viewHighlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+            viewHighlight.FillTransparency = 0.5
+            viewHighlight.OutlineTransparency = 0.1
+            viewHighlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            viewHighlight.Parent = gui
+            if viewConn then viewConn:Disconnect() end
+            viewConn = RunService.RenderStepped:Connect(function()
+                if not viewOn or not viewAlvo then return end
+                local char = viewAlvo.Character
+                if not char then
+                    if viewHighlight then viewHighlight.Adornee = nil end
+                    return
+                end
+                viewHighlight.Adornee = char
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                if not hrp then return end
+                -- Camera segue a pessoa (terceira pessoa)
+                local camPos = hrp.Position + (hrp.CFrame.LookVector * -8) + Vector3.new(0, 5, 0)
+                Camera.CFrame = CFrame.new(camPos, hrp.Position)
+            end)
+            viewBtn.BackgroundColor3=cor.verde; viewBtn.Text="VIEW ON"
+        else
+            viewOn = false
+            if viewConn then viewConn:Disconnect(); viewConn = nil end
+            if viewHighlight then pcall(function() viewHighlight:Destroy() end); viewHighlight = nil end
+            -- Reset camera
+            local char = player.Character
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                Camera.CameraSubject = char:FindFirstChildOfClass("Humanoid") or char.HumanoidRootPart
+                Camera.CameraType = Enum.CameraType.Custom
+            end
+            viewBtn.BackgroundColor3=cor.roxoE; viewBtn.Text="VIEW"
+        end
+    end)
 
     -- ESP
     telaESP=Instance.new("ScrollingFrame",main) telaESP.Size=UDim2.new(1,0,0,contentH) telaESP.Position=UDim2.new(0,0,0,contentY) telaESP.BackgroundTransparency=1 telaESP.ScrollBarThickness=3 telaESP.ScrollBarImageColor3=cor.roxo telaESP.BorderSizePixel=0 telaESP.Visible=false
@@ -627,7 +1184,7 @@ local function criarUI()
         {text="BOX", var="box"}, {text="TRACER CIMA", var="tracerCima"},
         {text="TRACER BAIXO", var="tracerBaixo"}, {text="VIDA BARRA", var="vidaBarra"},
         {text="DISTANCIA", var="dist"}, {text="NOME", var="nome"},
-        {text="CHAMS", var="chams"},
+        {text="CHAMS", var="chams"}, {text="ESQUELETO", var="esqueleto"},
     }
     local toggles = {}
     for i=1, #toggleData, 2 do
@@ -815,22 +1372,28 @@ local function criarUI()
 
     -- NAVEGACAO
     local function selecionarAba(aba)
-        telaHOME.Visible=(aba=="home"); telaESP.Visible=(aba=="esp"); telaPLAYER.Visible=(aba=="player"); telaConfig.Visible=false; st.cfgTela=false
-        abaHome.BackgroundColor3=(aba=="home") and cor.roxo or cor.roxoE; abaHome.BackgroundTransparency=(aba=="home") and 0.1 or 0.25
-        abaPLAYER.BackgroundColor3=(aba=="player") and cor.roxo or cor.roxoE; abaPLAYER.BackgroundTransparency=(aba=="player") and 0.1 or 0.25
+        telaHOME.Visible=(aba=="home"); telaESP.Visible=(aba=="esp"); telaPLAYER.Visible=(aba=="player"); telaVIEW.Visible=(aba=="view"); telaGOTO.Visible=(aba=="goto"); telaVISUAL.Visible=(aba=="visual"); telaConfig.Visible=false; st.cfgTela=false
+        abaHOME.BackgroundColor3=(aba=="home") and cor.roxo or cor.roxoE; abaHOME.BackgroundTransparency=(aba=="home") and 0.1 or 0.25
         abaESP.BackgroundColor3=(aba=="esp") and cor.roxo or cor.roxoE; abaESP.BackgroundTransparency=(aba=="esp") and 0.1 or 0.25
+        abaPLAYER.BackgroundColor3=(aba=="player") and cor.roxo or cor.roxoE; abaPLAYER.BackgroundTransparency=(aba=="player") and 0.1 or 0.25
+        abaVIEW.BackgroundColor3=(aba=="view") and cor.roxo or cor.roxoE; abaVIEW.BackgroundTransparency=(aba=="view") and 0.1 or 0.25
+        abaGOTO.BackgroundColor3=(aba=="goto") and cor.roxo or cor.roxoE; abaGOTO.BackgroundTransparency=(aba=="goto") and 0.1 or 0.25
+        abaVISUAL.BackgroundColor3=(aba=="visual") and cor.roxo or cor.roxoE; abaVISUAL.BackgroundTransparency=(aba=="visual") and 0.1 or 0.25
     end
-    abaHome.MouseButton1Click:Connect(function() selecionarAba("home") end)
-    abaPLAYER.MouseButton1Click:Connect(function() selecionarAba("player") end)
+    abaHOME.MouseButton1Click:Connect(function() selecionarAba("home") end)
     abaESP.MouseButton1Click:Connect(function() selecionarAba("esp") end)
+    abaPLAYER.MouseButton1Click:Connect(function() selecionarAba("player") end)
+    abaVIEW.MouseButton1Click:Connect(function() selecionarAba("view") end)
+    abaGOTO.MouseButton1Click:Connect(function() selecionarAba("goto") end)
+    abaVISUAL.MouseButton1Click:Connect(function() selecionarAba("visual") end)
     btnCfg.MouseButton1Click:Connect(function()
         st.cfgTela=not st.cfgTela
-        if st.cfgTela then telaHOME.Visible=false; telaPLAYER.Visible=false; telaESP.Visible=false; telaConfig.Visible=true; atualizarConfigs()
+        if st.cfgTela then telaHOME.Visible=false; telaESP.Visible=false; telaPLAYER.Visible=false; telaVIEW.Visible=false; telaGOTO.Visible=false; telaVISUAL.Visible=false; telaConfig.Visible=true; atualizarConfigs()
         else selecionarAba("home") end
     end)
     btnMin.MouseButton1Click:Connect(function()
         st.min=not st.min; btnMin.Text=st.min and "+"or"-"
-        ts:Create(main,TweenInfo.new(0.2),{Size=UDim2.new(0,200,0,st.min and 34 or 280)}):Play()
+        ts:Create(main,TweenInfo.new(0.2),{Size=UDim2.new(0,220,0,st.min and 34 or 300)}):Play()
     end)
 
     -- NOTIFICACAO
@@ -872,6 +1435,8 @@ local function criarUI()
             else sta.Text="Nenhum TP"sta.TextColor3=cor.cinza led.BackgroundColor3=cor.vermelho end
         end)
     end)
+
+    setupCopyClickDetector()
     selecionarAba("home")
 end
 
