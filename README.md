@@ -16,8 +16,14 @@ local cor = {
 }
 
 local st = {pos=nil,marker=nil,tp=false,dedo=false,dc=nil,min=false,ui=false,configs={},cfgTela=false}
+local spdVal = 16; local jmpVal = 50
+local spdAlways = false; local jmpAlways = false
+local noclipOn = false; local noclipAlways = false; local noclipConn = nil
+local alwaysConns = {}
+local afkOn = false; local afkConn = nil
+local spinOn = false; local spinConn = nil
 local gui,main,sta,led,tpBtn,barra,saveBtn,notif,ba,bd
-local telaHOME, telaESP, telaConfig
+local telaHOME, telaPLAYER, telaESP, telaConfig
 
 -- ============================================================
 --  ESP SETTINGS
@@ -310,6 +316,115 @@ local function marcar(pos)
 end
 
 -- ============================================================
+--  SPEED & JUMP
+-- ============================================================
+local function aplicarSpeed(val)
+    local char = player.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then hum.WalkSpeed = val end
+    end
+end
+local function aplicarJump(val)
+    local char = player.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then hum.JumpPower = val end
+    end
+end
+local function setupAlways()
+    for _, conn in pairs(alwaysConns) do pcall(function() conn:Disconnect() end) end
+    alwaysConns = {}
+    if spdAlways then
+        aplicarSpeed(spdVal)
+        local conn = player.CharacterAdded:Connect(function() task.wait(0.5) aplicarSpeed(spdVal) end)
+        table.insert(alwaysConns, conn)
+    end
+    if jmpAlways then
+        aplicarJump(jmpVal)
+        local conn = player.CharacterAdded:Connect(function() task.wait(0.5) aplicarJump(jmpVal) end)
+        table.insert(alwaysConns, conn)
+    end
+    if noclipAlways then
+        if player.Character then toggleNoclip(true) end
+        local conn = player.CharacterAdded:Connect(function() task.wait(0.5) toggleNoclip(true) end)
+        table.insert(alwaysConns, conn)
+    end
+end
+
+
+
+-- Noclip
+local function toggleNoclip(on)
+    if noclipConn then noclipConn:Disconnect(); noclipConn = nil end
+    noclipOn = on
+    if not on then return end
+    noclipConn = RunService.Stepped:Connect(function()
+        local char = player.Character
+        if not char then return end
+        for _, p in pairs(char:GetDescendants()) do
+            if p:IsA("BasePart") then p.CanCollide = false end
+        end
+    end)
+end
+
+-- Anti AFK
+local function toggleAFK(on)
+    if afkConn then afkConn:Disconnect(); afkConn = nil end
+    afkOn = on
+    if not on then return end
+    afkConn = RunService.Stepped:Connect(function()
+        if not afkOn then return end
+        local char = player.Character
+        if char and char:FindFirstChild("Humanoid") then
+            char.Humanoid:Move(Vector3.new(0.001, 0, 0), false)
+        end
+    end)
+end
+
+-- Anti Fall
+
+-- Spin Bot
+local function toggleSpin(on)
+    if spinConn then spinConn:Disconnect(); spinConn = nil end
+    spinOn = on
+    if not on then return end
+    spinConn = RunService.RenderStepped:Connect(function()
+        if not spinOn then return end
+        local char = player.Character
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            char.HumanoidRootPart.CFrame = char.HumanoidRootPart.CFrame * CFrame.Angles(0, math.rad(15), 0)
+        end
+    end)
+end
+
+
+-- Server Hop
+local function serverHop()
+    local http = game:GetService("HttpService")
+    local ts = game:GetService("TeleportService")
+    local api = "https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?limit=100"
+    local success, data = pcall(function()
+        return http:JSONDecode(game:HttpGetAsync(api))
+    end)
+    if success and data and data.data and #data.data > 0 then
+        local servers = data.data
+        local chosen = servers[math.random(1, #servers)]
+        ts:TeleportToPlaceInstance(game.PlaceId, chosen.id, player)
+    end
+end
+
+-- Rejoin
+local function rejoin()
+    local ts = game:GetService("TeleportService")
+    ts:Teleport(game.PlaceId, player)
+end
+
+-- Auto Click
+    end
+end
+
+-- ============================================================
 --  UI
 -- ============================================================
 local function criarUI()
@@ -317,6 +432,9 @@ local function criarUI()
     st.ui=true
 
     gui=Instance.new("ScreenGui") gui.Name="RatHub" gui.ResetOnSpawn=false gui.Parent=player:WaitForChild("PlayerGui")
+
+        end
+    end)
 
     main=Instance.new("Frame") main.Size=UDim2.new(0,200,0,280) main.Position=UDim2.new(0.5,-100,0.5,-140)
     main.BackgroundColor3=cor.fundo main.BackgroundTransparency=0.1 main.Active=true main.Draggable=true main.ClipsDescendants=true main.Parent=gui
@@ -338,12 +456,15 @@ local function criarUI()
     btnMin.BackgroundTransparency=1 btnMin.Text="-" btnMin.TextColor3=cor.branco btnMin.TextSize=16 btnMin.Font=Enum.Font.GothamBold
 
     local barraAbas=Instance.new("Frame",main) barraAbas.Size=UDim2.new(1,0,0,26) barraAbas.Position=UDim2.new(0,0,0,34) barraAbas.BackgroundTransparency=1
-    local abaHome=Instance.new("TextButton",barraAbas) abaHome.Size=UDim2.new(0.5,-1,0,20) abaHome.Position=UDim2.new(0.01,0,0,3)
+    local abaHome=Instance.new("TextButton",barraAbas) abaHome.Size=UDim2.new(0.33,-2,0,20) abaHome.Position=UDim2.new(0.01,0,0,3)
     abaHome.BackgroundColor3=cor.roxo abaHome.BackgroundTransparency=0.1 abaHome.Text="HOME" abaHome.TextColor3=cor.branco abaHome.TextSize=10 abaHome.Font=Enum.Font.GothamBlack
     Instance.new("UICorner",abaHome).CornerRadius=UDim.new(0,6)
-    local abaESP=Instance.new("TextButton",barraAbas) abaESP.Size=UDim2.new(0.5,-1,0,20) abaESP.Position=UDim2.new(0.5,1,0,3)
+    local abaESP=Instance.new("TextButton",barraAbas) abaESP.Size=UDim2.new(0.33,-2,0,20) abaESP.Position=UDim2.new(0.34,1,0,3)
     abaESP.BackgroundColor3=cor.roxoE abaESP.BackgroundTransparency=0.2 abaESP.Text="ESP" abaESP.TextColor3=cor.branco abaESP.TextSize=10 abaESP.Font=Enum.Font.GothamBlack
     Instance.new("UICorner",abaESP).CornerRadius=UDim.new(0,6)
+    local abaPLAYER=Instance.new("TextButton",barraAbas) abaPLAYER.Size=UDim2.new(0.33,-2,0,20) abaPLAYER.Position=UDim2.new(0.67,-1,0,3)
+    abaPLAYER.BackgroundColor3=cor.roxoE abaPLAYER.BackgroundTransparency=0.25 abaPLAYER.Text="PLAYER" abaPLAYER.TextColor3=cor.branco abaPLAYER.TextSize=10 abaPLAYER.Font=Enum.Font.GothamBlack
+    Instance.new("UICorner",abaPLAYER).CornerRadius=UDim.new(0,6)
 
     local contentY=34+26; local contentH=280-contentY
 
@@ -352,15 +473,146 @@ local function criarUI()
     local layH=Instance.new("UIListLayout",telaHOME) layH.Padding=UDim.new(0,4) layH.HorizontalAlignment=Enum.HorizontalAlignment.Center
     local padH=Instance.new("UIPadding",telaHOME) padH.PaddingTop=UDim.new(0,6) padH.PaddingBottom=UDim.new(0,6)
 
-    sta=Instance.new("TextLabel",telaHOME) sta.Size=UDim2.new(0.9,0,0,14) sta.BackgroundTransparency=1 sta.Text="Nenhum TP" sta.TextColor3=cor.branco sta.TextSize=9 sta.Font=Enum.Font.GothamBold sta.TextStrokeColor3=Color3.fromRGB(0,0,0) sta.TextStrokeTransparency=0.2
-    led=Instance.new("Frame",telaHOME) led.Size=UDim2.new(0,6,0,6) led.BackgroundColor3=cor.vermelho led.BorderSizePixel=0
+    sta=Instance.new("TextLabel",telaHOME) sta.Size=UDim2.new(0.9,0,0,18) sta.BackgroundTransparency=1 sta.Text="Nenhum TP" sta.TextColor3=cor.branco sta.TextSize=10 sta.Font=Enum.Font.GothamBold sta.TextStrokeColor3=Color3.fromRGB(0,0,0) sta.TextStrokeTransparency=0.2
+    led=Instance.new("Frame",telaHOME) led.Size=UDim2.new(0,8,0,8) led.BackgroundColor3=cor.vermelho led.BorderSizePixel=0
     Instance.new("UICorner",led).CornerRadius=UDim.new(1,0)
     local bb=Instance.new("Frame",telaHOME) bb.Size=UDim2.new(0.85,0,0,4) bb.BackgroundColor3=Color3.fromRGB(20,15,40) bb.BackgroundTransparency=0.3 Instance.new("UICorner",bb).CornerRadius=UDim.new(1,0)
     barra=Instance.new("Frame",bb) barra.Size=UDim2.new(0,0,1,0) barra.BackgroundColor3=cor.roxoC barra.BorderSizePixel=0 Instance.new("UICorner",barra).CornerRadius=UDim.new(1,0)
-    saveBtn=Instance.new("TextButton",telaHOME) saveBtn.Size=UDim2.new(0.88,0,0,32) saveBtn.BackgroundColor3=cor.roxo saveBtn.BackgroundTransparency=0.15 saveBtn.Text="SALVAR" saveBtn.TextColor3=cor.branco saveBtn.TextSize=11 saveBtn.Font=Enum.Font.GothamBlack
+    saveBtn=Instance.new("TextButton",telaHOME) saveBtn.Size=UDim2.new(0.88,0,0,34) saveBtn.BackgroundColor3=cor.roxo saveBtn.BackgroundTransparency=0.15 saveBtn.Text="SALVAR" saveBtn.TextColor3=cor.branco saveBtn.TextSize=12 saveBtn.Font=Enum.Font.GothamBlack
     Instance.new("UICorner",saveBtn).CornerRadius=UDim.new(0,9) Instance.new("UIStroke",saveBtn).Color=cor.roxoC Instance.new("UIStroke",saveBtn).Transparency=0.6
-    tpBtn=Instance.new("TextButton",telaHOME) tpBtn.Size=UDim2.new(0.88,0,0,32) tpBtn.BackgroundColor3=cor.roxoE tpBtn.BackgroundTransparency=0.25 tpBtn.Text="TP BRUTO" tpBtn.TextColor3=cor.branco tpBtn.TextSize=11 tpBtn.Font=Enum.Font.GothamBlack tpBtn.Visible=false
+    tpBtn=Instance.new("TextButton",telaHOME) tpBtn.Size=UDim2.new(0.88,0,0,34) tpBtn.BackgroundColor3=cor.roxoE tpBtn.BackgroundTransparency=0.25 tpBtn.Text="TP BRUTO" tpBtn.TextColor3=cor.branco tpBtn.TextSize=12 tpBtn.Font=Enum.Font.GothamBlack tpBtn.Visible=false
     Instance.new("UICorner",tpBtn).CornerRadius=UDim.new(0,9) Instance.new("UIStroke",tpBtn).Color=cor.roxo Instance.new("UIStroke",tpBtn).Transparency=0.7
+
+    -- PLAYER
+    telaPLAYER=Instance.new("ScrollingFrame",main) telaPLAYER.Size=UDim2.new(1,0,0,contentH) telaPLAYER.Position=UDim2.new(0,0,0,contentY) telaPLAYER.BackgroundTransparency=1 telaPLAYER.ScrollBarThickness=3 telaPLAYER.ScrollBarImageColor3=cor.roxo telaPLAYER.BorderSizePixel=0 telaPLAYER.Visible=false
+    local layP=Instance.new("UIListLayout",telaPLAYER) layP.Padding=UDim.new(0,5) layP.HorizontalAlignment=Enum.HorizontalAlignment.Center
+    local padP=Instance.new("UIPadding",telaPLAYER) padP.PaddingTop=UDim.new(0,8) padP.PaddingBottom=UDim.new(0,6)
+    
+    local spdFrame=Instance.new("Frame",telaPLAYER) spdFrame.Size=UDim2.new(0.88,0,0,28) spdFrame.BackgroundTransparency=1
+    
+    local spdInput=Instance.new("TextBox",spdFrame) spdInput.Size=UDim2.new(0.26,0,0,24) spdInput.Position=UDim2.new(0,0,0,2) spdInput.BackgroundColor3=Color3.fromRGB(25,15,45) spdInput.BackgroundTransparency=0.3 spdInput.Text="16" spdInput.TextColor3=cor.branco spdInput.TextSize=10 spdInput.Font=Enum.Font.GothamBold spdInput.PlaceholderColor3=cor.cinza spdInput.ClearTextOnFocus=false spdInput.TextXAlignment=Enum.TextXAlignment.Center
+    Instance.new("UICorner",spdInput).CornerRadius=UDim.new(0,5)
+    
+    local spdOnce=Instance.new("TextButton",spdFrame) spdOnce.Size=UDim2.new(0.34,-2,0,24) spdOnce.Position=UDim2.new(0.3,4,0,2) spdOnce.BackgroundColor3=cor.roxo spdOnce.BackgroundTransparency=0.15 spdOnce.Text="UMA VEZ" spdOnce.TextColor3=cor.branco spdOnce.TextSize=9 spdOnce.Font=Enum.Font.GothamBlack spdOnce.TextStrokeColor3=Color3.fromRGB(0,0,0) spdOnce.TextStrokeTransparency=0.2
+    Instance.new("UICorner",spdOnce).CornerRadius=UDim.new(0,6)
+    spdOnce.MouseEnter:Connect(function() ts:Create(spdOnce,TweenInfo.new(0.08),{Size=UDim2.new(0.36,-2,0,26),BackgroundColor3=cor.ciano,BackgroundTransparency=0.05}):Play() end)
+    spdOnce.MouseLeave:Connect(function() ts:Create(spdOnce,TweenInfo.new(0.1),{Size=UDim2.new(0.34,-2,0,24),BackgroundColor3=cor.roxo,BackgroundTransparency=0.15}):Play() end)
+    
+    local spdAlwaysBtn=Instance.new("TextButton",spdFrame) spdAlwaysBtn.Size=UDim2.new(0.34,-2,0,24) spdAlwaysBtn.Position=UDim2.new(0.66,6,0,2) spdAlwaysBtn.BackgroundColor3=cor.roxoE spdAlwaysBtn.BackgroundTransparency=0.2 spdAlwaysBtn.Text="SEMPRE" spdAlwaysBtn.TextColor3=cor.branco spdAlwaysBtn.TextSize=9 spdAlwaysBtn.Font=Enum.Font.GothamBlack spdAlwaysBtn.TextStrokeColor3=Color3.fromRGB(0,0,0) spdAlwaysBtn.TextStrokeTransparency=0.2
+    Instance.new("UICorner",spdAlwaysBtn).CornerRadius=UDim.new(0,6)
+    spdAlwaysBtn.MouseEnter:Connect(function() ts:Create(spdAlwaysBtn,TweenInfo.new(0.08),{Size=UDim2.new(0.36,-2,0,26)}):Play() end)
+    spdAlwaysBtn.MouseLeave:Connect(function() ts:Create(spdAlwaysBtn,TweenInfo.new(0.1),{Size=UDim2.new(0.34,-2,0,24)}):Play() end)
+    
+    spdOnce.MouseButton1Click:Connect(function()
+        local v = tonumber(spdInput.Text) or 16
+        spdVal = v
+        aplicarSpeed(v)
+    end)
+    spdAlwaysBtn.MouseButton1Click:Connect(function()
+        spdAlways = not spdAlways
+        spdAlwaysBtn.BackgroundColor3 = spdAlways and cor.verde or cor.roxoE
+        spdAlwaysBtn.BackgroundTransparency = spdAlways and 0.15 or 0.2
+        local v = tonumber(spdInput.Text) or 16
+        spdVal = v
+        if spdAlways then aplicarSpeed(v) end
+        setupAlways()
+    end)
+    
+    local jmpFrame=Instance.new("Frame",telaPLAYER) jmpFrame.Size=UDim2.new(0.88,0,0,28) jmpFrame.BackgroundTransparency=1
+    
+    local jmpInput=Instance.new("TextBox",jmpFrame) jmpInput.Size=UDim2.new(0.26,0,0,24) jmpInput.Position=UDim2.new(0,0,0,2) jmpInput.BackgroundColor3=Color3.fromRGB(25,15,45) jmpInput.BackgroundTransparency=0.3 jmpInput.Text="50" jmpInput.TextColor3=cor.branco jmpInput.TextSize=10 jmpInput.Font=Enum.Font.GothamBold jmpInput.PlaceholderColor3=cor.cinza jmpInput.ClearTextOnFocus=false jmpInput.TextXAlignment=Enum.TextXAlignment.Center
+    Instance.new("UICorner",jmpInput).CornerRadius=UDim.new(0,5)
+    
+    local jmpOnce=Instance.new("TextButton",jmpFrame) jmpOnce.Size=UDim2.new(0.34,-2,0,24) jmpOnce.Position=UDim2.new(0.3,4,0,2) jmpOnce.BackgroundColor3=cor.roxo jmpOnce.BackgroundTransparency=0.15 jmpOnce.Text="UMA VEZ" jmpOnce.TextColor3=cor.branco jmpOnce.TextSize=9 jmpOnce.Font=Enum.Font.GothamBlack jmpOnce.TextStrokeColor3=Color3.fromRGB(0,0,0) jmpOnce.TextStrokeTransparency=0.2
+    Instance.new("UICorner",jmpOnce).CornerRadius=UDim.new(0,6)
+    jmpOnce.MouseEnter:Connect(function() ts:Create(jmpOnce,TweenInfo.new(0.08),{Size=UDim2.new(0.36,-2,0,26),BackgroundColor3=cor.ciano,BackgroundTransparency=0.05}):Play() end)
+    jmpOnce.MouseLeave:Connect(function() ts:Create(jmpOnce,TweenInfo.new(0.1),{Size=UDim2.new(0.34,-2,0,24),BackgroundColor3=cor.roxo,BackgroundTransparency=0.15}):Play() end)
+    
+    local jmpAlwaysBtn=Instance.new("TextButton",jmpFrame) jmpAlwaysBtn.Size=UDim2.new(0.34,-2,0,24) jmpAlwaysBtn.Position=UDim2.new(0.66,6,0,2) jmpAlwaysBtn.BackgroundColor3=cor.roxoE jmpAlwaysBtn.BackgroundTransparency=0.2 jmpAlwaysBtn.Text="SEMPRE" jmpAlwaysBtn.TextColor3=cor.branco jmpAlwaysBtn.TextSize=9 jmpAlwaysBtn.Font=Enum.Font.GothamBlack jmpAlwaysBtn.TextStrokeColor3=Color3.fromRGB(0,0,0) jmpAlwaysBtn.TextStrokeTransparency=0.2
+    Instance.new("UICorner",jmpAlwaysBtn).CornerRadius=UDim.new(0,6)
+    jmpAlwaysBtn.MouseEnter:Connect(function() ts:Create(jmpAlwaysBtn,TweenInfo.new(0.08),{Size=UDim2.new(0.36,-2,0,26)}):Play() end)
+    jmpAlwaysBtn.MouseLeave:Connect(function() ts:Create(jmpAlwaysBtn,TweenInfo.new(0.1),{Size=UDim2.new(0.34,-2,0,24)}):Play() end)
+    
+    jmpOnce.MouseButton1Click:Connect(function()
+        local v = tonumber(jmpInput.Text) or 50
+        jmpVal = v
+        aplicarJump(v)
+    end)
+    jmpAlwaysBtn.MouseButton1Click:Connect(function()
+        jmpAlways = not jmpAlways
+        jmpAlwaysBtn.BackgroundColor3 = jmpAlways and cor.verde or cor.roxoE
+        jmpAlwaysBtn.BackgroundTransparency = jmpAlways and 0.15 or 0.2
+        local v = tonumber(jmpInput.Text) or 50
+        jmpVal = v
+        if jmpAlways then aplicarJump(v) end
+        setupAlways()
+    end)
+    
+
+    -- NOCLIP
+    local nocFrame=Instance.new("Frame",telaPLAYER) nocFrame.Size=UDim2.new(0.88,0,0,28) nocFrame.BackgroundTransparency=1
+    
+    local nocAtv=Instance.new("TextButton",nocFrame) nocAtv.Size=UDim2.new(0.5,-2,0,24) nocAtv.Position=UDim2.new(0,0,0,2) nocAtv.BackgroundColor3=cor.vermelho nocAtv.BackgroundTransparency=0.15 nocAtv.Text="NOCLIP" nocAtv.TextColor3=cor.branco nocAtv.TextSize=9 nocAtv.Font=Enum.Font.GothamBlack nocAtv.TextStrokeColor3=Color3.fromRGB(0,0,0) nocAtv.TextStrokeTransparency=0.2
+    Instance.new("UICorner",nocAtv).CornerRadius=UDim.new(0,6)
+    nocAtv.MouseEnter:Connect(function() ts:Create(nocAtv,TweenInfo.new(0.08),{Size=UDim2.new(0.52,-2,0,26),BackgroundColor3=cor.ciano,BackgroundTransparency=0.05}):Play() end)
+    nocAtv.MouseLeave:Connect(function() ts:Create(nocAtv,TweenInfo.new(0.1),{Size=UDim2.new(0.5,-2,0,24),BackgroundColor3=noclipOn and cor.verde or cor.vermelho,BackgroundTransparency=0.15}):Play() end)
+    
+    local nocAlwaysBtn=Instance.new("TextButton",nocFrame) nocAlwaysBtn.Size=UDim2.new(0.46,-2,0,24) nocAlwaysBtn.Position=UDim2.new(0.54,4,0,2) nocAlwaysBtn.BackgroundColor3=cor.roxoE nocAlwaysBtn.BackgroundTransparency=0.2 nocAlwaysBtn.Text="SEMPRE" nocAlwaysBtn.TextColor3=cor.branco nocAlwaysBtn.TextSize=9 nocAlwaysBtn.Font=Enum.Font.GothamBlack nocAlwaysBtn.TextStrokeColor3=Color3.fromRGB(0,0,0) nocAlwaysBtn.TextStrokeTransparency=0.2
+    Instance.new("UICorner",nocAlwaysBtn).CornerRadius=UDim.new(0,6)
+    nocAlwaysBtn.MouseEnter:Connect(function() ts:Create(nocAlwaysBtn,TweenInfo.new(0.08),{Size=UDim2.new(0.48,-2,0,26)}):Play() end)
+    nocAlwaysBtn.MouseLeave:Connect(function() ts:Create(nocAlwaysBtn,TweenInfo.new(0.1),{Size=UDim2.new(0.46,-2,0,24)}):Play() end)
+    
+    nocAtv.MouseButton1Click:Connect(function()
+        if not noclipOn then
+            toggleNoclip(true)
+            nocAtv.BackgroundColor3 = cor.verde; nocAtv.Text = "NOCLIP ON"
+        else
+            toggleNoclip(false)
+            nocAtv.BackgroundColor3 = cor.vermelho; nocAtv.Text = "NOCLIP"
+        end
+    end)
+    nocAlwaysBtn.MouseButton1Click:Connect(function()
+        noclipAlways = not noclipAlways
+        nocAlwaysBtn.BackgroundColor3 = noclipAlways and cor.verde or cor.roxoE
+        nocAlwaysBtn.BackgroundTransparency = noclipAlways and 0.15 or 0.2
+        setupAlways()
+    end)
+
+    -- SEPARADOR EXTRAS
+    local sepP=Instance.new("TextLabel",telaPLAYER) sepP.Size=UDim2.new(0.9,0,0,12) sepP.BackgroundTransparency=1 sepP.Text="─ EXTRAS ─" sepP.TextColor3=cor.branco sepP.TextSize=8 sepP.Font=Enum.Font.GothamBold sepP.TextTransparency=0.2 sepP.TextStrokeColor3=Color3.fromRGB(0,0,0) sepP.TextStrokeTransparency=0.2
+
+    -- ANTI AFK
+    local afkBtn=Instance.new("TextButton",telaPLAYER) afkBtn.Size=UDim2.new(0.88,0,0,28) afkBtn.BackgroundColor3=cor.roxoE afkBtn.BackgroundTransparency=0.2 afkBtn.Text="ANTI AFK" afkBtn.TextColor3=cor.branco afkBtn.TextSize=9 afkBtn.Font=Enum.Font.GothamBlack afkBtn.TextStrokeColor3=Color3.fromRGB(0,0,0) afkBtn.TextStrokeTransparency=0.2
+    Instance.new("UICorner",afkBtn).CornerRadius=UDim.new(0,6)
+    afkBtn.MouseEnter:Connect(function() ts:Create(afkBtn,TweenInfo.new(0.08),{Size=UDim2.new(0.9,0,0,30),BackgroundColor3=cor.ciano,BackgroundTransparency=0.1}):Play() end)
+    afkBtn.MouseLeave:Connect(function() ts:Create(afkBtn,TweenInfo.new(0.1),{Size=UDim2.new(0.88,0,0,28),BackgroundColor3=afkOn and cor.verde or cor.roxoE,BackgroundTransparency=0.2}):Play() end)
+    afkBtn.MouseButton1Click:Connect(function() toggleAFK(not afkOn); afkBtn.BackgroundColor3=afkOn and cor.verde or cor.roxoE; afkBtn.Text=afkOn and "ANTI AFK ON" or "ANTI AFK" end)
+
+
+    -- SPIN BOT
+    local spinBtn=Instance.new("TextButton",telaPLAYER) spinBtn.Size=UDim2.new(0.88,0,0,28) spinBtn.BackgroundColor3=cor.roxoE spinBtn.BackgroundTransparency=0.2 spinBtn.Text="SPIN BOT" spinBtn.TextColor3=cor.branco spinBtn.TextSize=9 spinBtn.Font=Enum.Font.GothamBlack spinBtn.TextStrokeColor3=Color3.fromRGB(0,0,0) spinBtn.TextStrokeTransparency=0.2
+    Instance.new("UICorner",spinBtn).CornerRadius=UDim.new(0,6)
+    spinBtn.MouseEnter:Connect(function() ts:Create(spinBtn,TweenInfo.new(0.08),{Size=UDim2.new(0.9,0,0,30),BackgroundColor3=cor.ciano,BackgroundTransparency=0.1}):Play() end)
+    spinBtn.MouseLeave:Connect(function() ts:Create(spinBtn,TweenInfo.new(0.1),{Size=UDim2.new(0.88,0,0,28),BackgroundColor3=spinOn and cor.verde or cor.roxoE,BackgroundTransparency=0.2}):Play() end)
+    spinBtn.MouseButton1Click:Connect(function() toggleSpin(not spinOn); spinBtn.BackgroundColor3=spinOn and cor.verde or cor.roxoE; spinBtn.Text=spinOn and "SPIN ON" or "SPIN BOT" end)
+
+
+    -- SERVER HOP
+    local shBtn=Instance.new("TextButton",telaPLAYER) shBtn.Size=UDim2.new(0.88,0,0,28) shBtn.BackgroundColor3=cor.roxo shBtn.BackgroundTransparency=0.15 shBtn.Text="SERVER HOP" shBtn.TextColor3=cor.branco shBtn.TextSize=9 shBtn.Font=Enum.Font.GothamBlack shBtn.TextStrokeColor3=Color3.fromRGB(0,0,0) shBtn.TextStrokeTransparency=0.2
+    Instance.new("UICorner",shBtn).CornerRadius=UDim.new(0,6)
+    shBtn.MouseEnter:Connect(function() ts:Create(shBtn,TweenInfo.new(0.08),{Size=UDim2.new(0.9,0,0,30),BackgroundColor3=cor.ciano,BackgroundTransparency=0.05}):Play() end)
+    shBtn.MouseLeave:Connect(function() ts:Create(shBtn,TweenInfo.new(0.1),{Size=UDim2.new(0.88,0,0,28),BackgroundColor3=cor.roxo,BackgroundTransparency=0.15}):Play() end)
+    shBtn.MouseButton1Click:Connect(serverHop)
+
+    -- REJOIN
+    local rjBtn=Instance.new("TextButton",telaPLAYER) rjBtn.Size=UDim2.new(0.88,0,0,28) rjBtn.BackgroundColor3=cor.roxo rjBtn.BackgroundTransparency=0.15 rjBtn.Text="REJOIN" rjBtn.TextColor3=cor.branco rjBtn.TextSize=9 rjBtn.Font=Enum.Font.GothamBlack rjBtn.TextStrokeColor3=Color3.fromRGB(0,0,0) rjBtn.TextStrokeTransparency=0.2
+    Instance.new("UICorner",rjBtn).CornerRadius=UDim.new(0,6)
+    rjBtn.MouseEnter:Connect(function() ts:Create(rjBtn,TweenInfo.new(0.08),{Size=UDim2.new(0.9,0,0,30),BackgroundColor3=cor.ciano,BackgroundTransparency=0.05}):Play() end)
+    rjBtn.MouseLeave:Connect(function() ts:Create(rjBtn,TweenInfo.new(0.1),{Size=UDim2.new(0.88,0,0,28),BackgroundColor3=cor.roxo,BackgroundTransparency=0.15}):Play() end)
+    rjBtn.MouseButton1Click:Connect(rejoin)
+
+    
+
 
     -- ESP
     telaESP=Instance.new("ScrollingFrame",main) telaESP.Size=UDim2.new(1,0,0,contentH) telaESP.Position=UDim2.new(0,0,0,contentY) telaESP.BackgroundTransparency=1 telaESP.ScrollBarThickness=3 telaESP.ScrollBarImageColor3=cor.roxo telaESP.BorderSizePixel=0 telaESP.Visible=false
@@ -368,11 +620,11 @@ local function criarUI()
     local padE=Instance.new("UIPadding",telaESP) padE.PaddingTop=UDim.new(0,5) padE.PaddingBottom=UDim.new(0,6)
 
     -- ESP ATIVAR
-    local btnAtv=Instance.new("TextButton",telaESP) btnAtv.Size=UDim2.new(0.88,0,0,30) btnAtv.BackgroundColor3=cor.vermelho btnAtv.BackgroundTransparency=0.15 btnAtv.Text="ESP ATIVAR" btnAtv.TextColor3=cor.branco btnAtv.TextSize=12 btnAtv.Font=Enum.Font.GothamBlack btnAtv.TextStrokeColor3=Color3.fromRGB(0,0,0) btnAtv.TextStrokeTransparency=0.15
+    local btnAtv=Instance.new("TextButton",telaESP) btnAtv.Size=UDim2.new(0.88,0,0,34) btnAtv.BackgroundColor3=cor.vermelho btnAtv.BackgroundTransparency=0.15 btnAtv.Text="ESP ATIVAR" btnAtv.TextColor3=cor.branco btnAtv.TextSize=13 btnAtv.Font=Enum.Font.GothamBlack btnAtv.TextStrokeColor3=Color3.fromRGB(0,0,0) btnAtv.TextStrokeTransparency=0.15
     Instance.new("UICorner",btnAtv).CornerRadius=UDim.new(0,9) Instance.new("UIStroke",btnAtv).Color=Color3.fromRGB(0,0,0) Instance.new("UIStroke",btnAtv).Transparency=0.3 Instance.new("UIStroke",btnAtv).Thickness=1.5
     local atvGlow=Instance.new("UIStroke",btnAtv) atvGlow.Color=cor.ciano atvGlow.Thickness=4 atvGlow.Transparency=1
     btnAtv.MouseEnter:Connect(function() ts:Create(btnAtv,TweenInfo.new(0.1),{Size=UDim2.new(0.9,0,0,32),BackgroundTransparency=0.05}):Play() end)
-    btnAtv.MouseLeave:Connect(function() ts:Create(btnAtv,TweenInfo.new(0.1),{Size=UDim2.new(0.88,0,0,30),BackgroundTransparency=esp.ativo and 0.15 or 0.15}):Play() end)
+    btnAtv.MouseLeave:Connect(function() ts:Create(btnAtv,TweenInfo.new(0.1),{Size=UDim2.new(0.88,0,0,34),BackgroundTransparency=esp.ativo and 0.15 or 0.15}):Play() end)
 
     local sep1=Instance.new("TextLabel",telaESP) sep1.Size=UDim2.new(0.9,0,0,12) sep1.BackgroundTransparency=1 sep1.Text="─ FUNCOES ─" sep1.TextColor3=cor.branco sep1.TextSize=8 sep1.Font=Enum.Font.GothamBold sep1.TextTransparency=0.2 sep1.TextStrokeColor3=Color3.fromRGB(0,0,0) sep1.TextStrokeTransparency=0.2
 
@@ -385,16 +637,16 @@ local function criarUI()
     }
     local toggles = {}
     for i=1, #toggleData, 2 do
-        local ln=Instance.new("Frame",telaESP) ln.Size=UDim2.new(0.88,0,0,26) ln.BackgroundTransparency=1
+        local ln=Instance.new("Frame",telaESP) ln.Size=UDim2.new(0.88,0,0,28) ln.BackgroundTransparency=1
         for j=0,1 do
             local idx=i+j; if idx>#toggleData then break end
             local td=toggleData[idx]
-            local btn=Instance.new("TextButton",ln) btn.Size=UDim2.new(0.5,-2,0,24) btn.Position=UDim2.new(j*0.5, j*2,0,1)
-            btn.BackgroundColor3=cor.roxoE btn.BackgroundTransparency=0.2 btn.Text=td.text btn.TextColor3=cor.branco btn.TextSize=9 btn.Font=Enum.Font.GothamBlack btn.TextStrokeColor3=Color3.fromRGB(0,0,0) btn.TextStrokeTransparency=0.2
+            local btn=Instance.new("TextButton",ln) btn.Size=UDim2.new(0.5,-2,0,26) btn.Position=UDim2.new(j*0.5, j*2,0,1)
+            btn.BackgroundColor3=cor.roxoE btn.BackgroundTransparency=0.2 btn.Text=td.text btn.TextColor3=cor.branco btn.TextSize=10 btn.Font=Enum.Font.GothamBlack btn.TextStrokeColor3=Color3.fromRGB(0,0,0) btn.TextStrokeTransparency=0.2
             Instance.new("UICorner",btn).CornerRadius=UDim.new(0,6)
             Instance.new("UIStroke",btn).Color=Color3.fromRGB(0,0,0) Instance.new("UIStroke",btn).Transparency=0.4 Instance.new("UIStroke",btn).Thickness=1
-            btn.MouseEnter:Connect(function() ts:Create(btn,TweenInfo.new(0.1),{Size=UDim2.new(0.5,-1,0,26),BackgroundTransparency=0.1}):Play() end)
-            btn.MouseLeave:Connect(function() ts:Create(btn,TweenInfo.new(0.1),{Size=UDim2.new(0.5,-2,0,24),BackgroundTransparency=esp.ativo and 0.2 or 0.6}):Play() end)
+            btn.MouseEnter:Connect(function() ts:Create(btn,TweenInfo.new(0.1),{Size=UDim2.new(0.5,-1,0,28),BackgroundTransparency=0.1}):Play() end)
+            btn.MouseLeave:Connect(function() ts:Create(btn,TweenInfo.new(0.1),{Size=UDim2.new(0.5,-2,0,26),BackgroundTransparency=esp.ativo and 0.2 or 0.6}):Play() end)
             toggles[td.var]=btn
         end
     end
@@ -423,29 +675,29 @@ local function criarUI()
         Color3.fromRGB(255,150,200),Color3.fromRGB(150,75,0),Color3.fromRGB(200,100,50),Color3.fromRGB(255,215,0),Color3.fromRGB(200,170,0),
         Color3.fromRGB(100,200,255),Color3.fromRGB(50,150,200),Color3.fromRGB(255,100,50),Color3.fromRGB(200,80,40),Color3.fromRGB(0,255,100),
     }
-    local corGrid=Instance.new("Frame",telaESP) corGrid.Size=UDim2.new(0.88,0,0,150) corGrid.BackgroundTransparency=1
+    local corGrid=Instance.new("Frame",telaESP) corGrid.Size=UDim2.new(0.88,0,0,170) corGrid.BackgroundTransparency=1
     for i, c in ipairs(coresLista) do
         local col=(i-1)%5; local row=math.floor((i-1)/5)
-        local bt=Instance.new("TextButton",corGrid) bt.Size=UDim2.new(0,30,0,13) bt.Position=UDim2.new(0,col*33,0,row*15) bt.BackgroundColor3=c bt.Text=""
+        local bt=Instance.new("TextButton",corGrid) bt.Size=UDim2.new(0,34,0,15) bt.Position=UDim2.new(0,col*36,0,row*17) bt.BackgroundColor3=c bt.Text=""
         Instance.new("UICorner",bt).CornerRadius=UDim.new(0,3)
-        bt.MouseEnter:Connect(function() ts:Create(bt,TweenInfo.new(0.08),{Size=UDim2.new(0,33,0,15)}):Play() end)
-        bt.MouseLeave:Connect(function() ts:Create(bt,TweenInfo.new(0.1),{Size=UDim2.new(0,30,0,13)}):Play() end)
+        bt.MouseEnter:Connect(function() ts:Create(bt,TweenInfo.new(0.08),{Size=UDim2.new(0,37,0,17)}):Play() end)
+        bt.MouseLeave:Connect(function() ts:Create(bt,TweenInfo.new(0.1),{Size=UDim2.new(0,34,0,15)}):Play() end)
         bt.MouseButton1Click:Connect(function() esp.cor=c; atualizarChams() end)
     end
 
     -- RGB
     local rgbT=Instance.new("TextLabel",telaESP) rgbT.Size=UDim2.new(0.9,0,0,12) rgbT.BackgroundTransparency=1 rgbT.Text="RGB" rgbT.TextColor3=cor.branco rgbT.TextSize=8 rgbT.Font=Enum.Font.GothamBold rgbT.TextTransparency=0.2 rgbT.TextStrokeColor3=Color3.fromRGB(0,0,0) rgbT.TextStrokeTransparency=0.2
-    local rgbF=Instance.new("Frame",telaESP) rgbF.Size=UDim2.new(0.88,0,0,22) rgbF.BackgroundTransparency=1
-    local rI=Instance.new("TextBox",rgbF) rI.Size=UDim2.new(0,36,0,18) rI.Position=UDim2.new(0,0,0,2) rI.BackgroundColor3=Color3.fromRGB(25,15,45) rI.BackgroundTransparency=0.3 rI.Text="0" rI.TextColor3=cor.branco rI.TextSize=9 rI.Font=Enum.Font.GothamBold rI.PlaceholderColor3=cor.cinza rI.ClearTextOnFocus=false rI.TextXAlignment=Enum.TextXAlignment.Center
+    local rgbF=Instance.new("Frame",telaESP) rgbF.Size=UDim2.new(0.88,0,0,26) rgbF.BackgroundTransparency=1
+    local rI=Instance.new("TextBox",rgbF) rI.Size=UDim2.new(0,40,0,22) rI.Position=UDim2.new(0,0,0,2) rI.BackgroundColor3=Color3.fromRGB(25,15,45) rI.BackgroundTransparency=0.3 rI.Text="0" rI.TextColor3=cor.branco rI.TextSize=9 rI.Font=Enum.Font.GothamBold rI.PlaceholderColor3=cor.cinza rI.ClearTextOnFocus=false rI.TextXAlignment=Enum.TextXAlignment.Center
     Instance.new("UICorner",rI).CornerRadius=UDim.new(0,4)
-    local gI=Instance.new("TextBox",rgbF) gI.Size=UDim2.new(0,36,0,18) gI.Position=UDim2.new(0,40,0,2) gI.BackgroundColor3=Color3.fromRGB(25,15,45) gI.BackgroundTransparency=0.3 gI.Text="240" gI.TextColor3=cor.branco gI.TextSize=9 gI.Font=Enum.Font.GothamBold gI.PlaceholderColor3=cor.cinza gI.ClearTextOnFocus=false gI.TextXAlignment=Enum.TextXAlignment.Center
+    local gI=Instance.new("TextBox",rgbF) gI.Size=UDim2.new(0,40,0,22) gI.Position=UDim2.new(0,44,0,2) gI.BackgroundColor3=Color3.fromRGB(25,15,45) gI.BackgroundTransparency=0.3 gI.Text="240" gI.TextColor3=cor.branco gI.TextSize=9 gI.Font=Enum.Font.GothamBold gI.PlaceholderColor3=cor.cinza gI.ClearTextOnFocus=false gI.TextXAlignment=Enum.TextXAlignment.Center
     Instance.new("UICorner",gI).CornerRadius=UDim.new(0,4)
-    local bI=Instance.new("TextBox",rgbF) bI.Size=UDim2.new(0,36,0,18) bI.Position=UDim2.new(0,80,0,2) bI.BackgroundColor3=Color3.fromRGB(25,15,45) bI.BackgroundTransparency=0.3 bI.Text="255" bI.TextColor3=cor.branco bI.TextSize=9 bI.Font=Enum.Font.GothamBold bI.PlaceholderColor3=cor.cinza bI.ClearTextOnFocus=false bI.TextXAlignment=Enum.TextXAlignment.Center
+    local bI=Instance.new("TextBox",rgbF) bI.Size=UDim2.new(0,40,0,22) bI.Position=UDim2.new(0,88,0,2) bI.BackgroundColor3=Color3.fromRGB(25,15,45) bI.BackgroundTransparency=0.3 bI.Text="255" bI.TextColor3=cor.branco bI.TextSize=9 bI.Font=Enum.Font.GothamBold bI.PlaceholderColor3=cor.cinza bI.ClearTextOnFocus=false bI.TextXAlignment=Enum.TextXAlignment.Center
     Instance.new("UICorner",bI).CornerRadius=UDim.new(0,4)
-    local rgbBt=Instance.new("TextButton",rgbF) rgbBt.Size=UDim2.new(0,36,0,18) rgbBt.Position=UDim2.new(0,122,0,2) rgbBt.BackgroundColor3=cor.roxo rgbBt.BackgroundTransparency=0.15 rgbBt.Text=">" rgbBt.TextColor3=cor.branco rgbBt.TextSize=10 rgbBt.Font=Enum.Font.GothamBlack
+    local rgbBt=Instance.new("TextButton",rgbF) rgbBt.Size=UDim2.new(0,40,0,22) rgbBt.Position=UDim2.new(0,134,0,2) rgbBt.BackgroundColor3=cor.roxo rgbBt.BackgroundTransparency=0.15 rgbBt.Text=">" rgbBt.TextColor3=cor.branco rgbBt.TextSize=10 rgbBt.Font=Enum.Font.GothamBlack
     Instance.new("UICorner",rgbBt).CornerRadius=UDim.new(0,5)
-    rgbBt.MouseEnter:Connect(function() ts:Create(rgbBt,TweenInfo.new(0.08),{Size=UDim2.new(0,40,0,20),BackgroundColor3=cor.ciano,BackgroundTransparency=0.05}):Play() end)
-    rgbBt.MouseLeave:Connect(function() ts:Create(rgbBt,TweenInfo.new(0.1),{Size=UDim2.new(0,36,0,18),BackgroundColor3=cor.roxo,BackgroundTransparency=0.15}):Play() end)
+    rgbBt.MouseEnter:Connect(function() ts:Create(rgbBt,TweenInfo.new(0.08),{Size=UDim2.new(0,44,0,24),BackgroundColor3=cor.ciano,BackgroundTransparency=0.05}):Play() end)
+    rgbBt.MouseLeave:Connect(function() ts:Create(rgbBt,TweenInfo.new(0.1),{Size=UDim2.new(0,40,0,22),BackgroundColor3=cor.roxo,BackgroundTransparency=0.15}):Play() end)
     rgbBt.MouseButton1Click:Connect(function()
         local r=math.clamp(tonumber(rI.Text)or 0,0,255); local g=math.clamp(tonumber(gI.Text)or 0,0,255); local b=math.clamp(tonumber(bI.Text)or 0,0,255)
         esp.cor=Color3.fromRGB(r,g,b); atualizarChams()
@@ -454,15 +706,15 @@ local function criarUI()
     -- SETA PESSOA
     local sep3=Instance.new("TextLabel",telaESP) sep3.Size=UDim2.new(0.9,0,0,12) sep3.BackgroundTransparency=1 sep3.Text="─ SETA PESSOA ─" sep3.TextColor3=cor.branco sep3.TextSize=8 sep3.Font=Enum.Font.GothamBold sep3.TextTransparency=0.2 sep3.TextStrokeColor3=Color3.fromRGB(0,0,0) sep3.TextStrokeTransparency=0.2
 
-    local setaFrame=Instance.new("Frame",telaESP) setaFrame.Size=UDim2.new(0.88,0,0,24) setaFrame.BackgroundTransparency=1
+    local setaFrame=Instance.new("Frame",telaESP) setaFrame.Size=UDim2.new(0.88,0,0,28) setaFrame.BackgroundTransparency=1
 
-    local nomeSeta=Instance.new("TextBox",setaFrame) nomeSeta.Size=UDim2.new(0.58,0,0,20) nomeSeta.Position=UDim2.new(0,0,0,2) nomeSeta.BackgroundColor3=Color3.fromRGB(25,15,45) nomeSeta.BackgroundTransparency=0.3 nomeSeta.Text="" nomeSeta.TextColor3=cor.branco nomeSeta.TextSize=9 nomeSeta.Font=Enum.Font.Gotham nomeSeta.PlaceholderText="nick do cara" nomeSeta.PlaceholderColor3=cor.cinza nomeSeta.ClearTextOnFocus=false nomeSeta.TextXAlignment=Enum.TextXAlignment.Center
+    local nomeSeta=Instance.new("TextBox",setaFrame) nomeSeta.Size=UDim2.new(0.58,0,0,24) nomeSeta.Position=UDim2.new(0,0,0,2) nomeSeta.BackgroundColor3=Color3.fromRGB(25,15,45) nomeSeta.BackgroundTransparency=0.3 nomeSeta.Text="" nomeSeta.TextColor3=cor.branco nomeSeta.TextSize=9 nomeSeta.Font=Enum.Font.Gotham nomeSeta.PlaceholderText="nick do cara" nomeSeta.PlaceholderColor3=cor.cinza nomeSeta.ClearTextOnFocus=false nomeSeta.TextXAlignment=Enum.TextXAlignment.Center
     Instance.new("UICorner",nomeSeta).CornerRadius=UDim.new(0,5)
 
-    local btnSeta=Instance.new("TextButton",setaFrame) btnSeta.Size=UDim2.new(0.38,0,0,20) btnSeta.Position=UDim2.new(0.6,4,0,2) btnSeta.BackgroundColor3=cor.roxo btnSeta.BackgroundTransparency=0.15 btnSeta.Text="SETA PESSOA" btnSeta.TextColor3=cor.branco btnSeta.TextSize=8 btnSeta.Font=Enum.Font.GothamBlack btnSeta.TextStrokeColor3=Color3.fromRGB(0,0,0) btnSeta.TextStrokeTransparency=0.15
+    local btnSeta=Instance.new("TextButton",setaFrame) btnSeta.Size=UDim2.new(0.38,0,0,24) btnSeta.Position=UDim2.new(0.6,4,0,2) btnSeta.BackgroundColor3=cor.roxo btnSeta.BackgroundTransparency=0.15 btnSeta.Text="SETA PESSOA" btnSeta.TextColor3=cor.branco btnSeta.TextSize=8 btnSeta.Font=Enum.Font.GothamBlack btnSeta.TextStrokeColor3=Color3.fromRGB(0,0,0) btnSeta.TextStrokeTransparency=0.15
     Instance.new("UICorner",btnSeta).CornerRadius=UDim.new(0,5) Instance.new("UIStroke",btnSeta).Color=Color3.fromRGB(0,0,0) Instance.new("UIStroke",btnSeta).Transparency=0.3 Instance.new("UIStroke",btnSeta).Thickness=1.5
-    btnSeta.MouseEnter:Connect(function() ts:Create(btnSeta,TweenInfo.new(0.08),{Size=UDim2.new(0.4,0,0,22),BackgroundColor3=cor.ciano,BackgroundTransparency=0.05}):Play() end)
-    btnSeta.MouseLeave:Connect(function() ts:Create(btnSeta,TweenInfo.new(0.1),{Size=UDim2.new(0.38,0,0,20),BackgroundColor3=cor.roxo,BackgroundTransparency=0.15}):Play() end)
+    btnSeta.MouseEnter:Connect(function() ts:Create(btnSeta,TweenInfo.new(0.08),{Size=UDim2.new(0.4,0,0,26),BackgroundColor3=cor.ciano,BackgroundTransparency=0.05}):Play() end)
+    btnSeta.MouseLeave:Connect(function() ts:Create(btnSeta,TweenInfo.new(0.1),{Size=UDim2.new(0.38,0,0,24),BackgroundColor3=cor.roxo,BackgroundTransparency=0.15}):Play() end)
 
     local setaStatus=Instance.new("TextLabel",telaESP) setaStatus.Size=UDim2.new(0.88,0,0,14) setaStatus.BackgroundTransparency=1 setaStatus.Text="" setaStatus.TextColor3=cor.cinza setaStatus.TextSize=8 setaStatus.Font=Enum.Font.Gotham setaStatus.TextStrokeColor3=Color3.fromRGB(0,0,0) setaStatus.TextStrokeTransparency=0.2
 
@@ -487,10 +739,10 @@ local function criarUI()
     end)
 
     -- Botao limpar seta
-    local btnLimparSeta=Instance.new("TextButton",telaESP) btnLimparSeta.Size=UDim2.new(0.88,0,0,20) btnLimparSeta.BackgroundColor3=cor.roxoE btnLimparSeta.BackgroundTransparency=0.2 btnLimparSeta.Text="LIMPAR SETA" btnLimparSeta.TextColor3=cor.branco btnLimparSeta.TextSize=8 btnLimparSeta.Font=Enum.Font.GothamBlack btnLimparSeta.TextStrokeColor3=Color3.fromRGB(0,0,0) btnLimparSeta.TextStrokeTransparency=0.15
+    local btnLimparSeta=Instance.new("TextButton",telaESP) btnLimparSeta.Size=UDim2.new(0.88,0,0,26) btnLimparSeta.BackgroundColor3=cor.roxoE btnLimparSeta.BackgroundTransparency=0.2 btnLimparSeta.Text="LIMPAR SETA" btnLimparSeta.TextColor3=cor.branco btnLimparSeta.TextSize=8 btnLimparSeta.Font=Enum.Font.GothamBlack btnLimparSeta.TextStrokeColor3=Color3.fromRGB(0,0,0) btnLimparSeta.TextStrokeTransparency=0.15
     Instance.new("UICorner",btnLimparSeta).CornerRadius=UDim.new(0,5)
-    btnLimparSeta.MouseEnter:Connect(function() ts:Create(btnLimparSeta,TweenInfo.new(0.08),{Size=UDim2.new(0.9,0,0,22),BackgroundColor3=cor.vermelho,BackgroundTransparency=0.1}):Play() end)
-    btnLimparSeta.MouseLeave:Connect(function() ts:Create(btnLimparSeta,TweenInfo.new(0.1),{Size=UDim2.new(0.88,0,0,20),BackgroundColor3=cor.roxoE,BackgroundTransparency=0.2}):Play() end)
+    btnLimparSeta.MouseEnter:Connect(function() ts:Create(btnLimparSeta,TweenInfo.new(0.08),{Size=UDim2.new(0.9,0,0,28),BackgroundColor3=cor.vermelho,BackgroundTransparency=0.1}):Play() end)
+    btnLimparSeta.MouseLeave:Connect(function() ts:Create(btnLimparSeta,TweenInfo.new(0.1),{Size=UDim2.new(0.88,0,0,26),BackgroundColor3=cor.roxoE,BackgroundTransparency=0.2}):Play() end)
     btnLimparSeta.MouseButton1Click:Connect(function()
         limparSeta()
         setaStatus.Text=""; nomeSeta.Text=""
@@ -569,15 +821,17 @@ local function criarUI()
 
     -- NAVEGACAO
     local function selecionarAba(aba)
-        telaHOME.Visible=(aba=="home"); telaESP.Visible=(aba=="esp"); telaConfig.Visible=false; st.cfgTela=false
+        telaHOME.Visible=(aba=="home"); telaESP.Visible=(aba=="esp"); telaPLAYER.Visible=(aba=="player"); telaConfig.Visible=false; st.cfgTela=false
         abaHome.BackgroundColor3=(aba=="home") and cor.roxo or cor.roxoE; abaHome.BackgroundTransparency=(aba=="home") and 0.1 or 0.25
+        abaPLAYER.BackgroundColor3=(aba=="player") and cor.roxo or cor.roxoE; abaPLAYER.BackgroundTransparency=(aba=="player") and 0.1 or 0.25
         abaESP.BackgroundColor3=(aba=="esp") and cor.roxo or cor.roxoE; abaESP.BackgroundTransparency=(aba=="esp") and 0.1 or 0.25
     end
     abaHome.MouseButton1Click:Connect(function() selecionarAba("home") end)
+    abaPLAYER.MouseButton1Click:Connect(function() selecionarAba("player") end)
     abaESP.MouseButton1Click:Connect(function() selecionarAba("esp") end)
     btnCfg.MouseButton1Click:Connect(function()
         st.cfgTela=not st.cfgTela
-        if st.cfgTela then telaHOME.Visible=false; telaESP.Visible=false; telaConfig.Visible=true; atualizarConfigs()
+        if st.cfgTela then telaHOME.Visible=false; telaPLAYER.Visible=false; telaESP.Visible=false; telaConfig.Visible=true; atualizarConfigs()
         else selecionarAba("home") end
     end)
     btnMin.MouseButton1Click:Connect(function()
