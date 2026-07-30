@@ -382,8 +382,6 @@ local function toggleAFK(on)
     end)
 end
 
--- Anti Fall
-
 -- Spin Bot
 local function toggleSpin(on)
     if spinConn then spinConn:Disconnect(); spinConn = nil end
@@ -397,7 +395,6 @@ local function toggleSpin(on)
         end
     end)
 end
-
 
 -- Server Hop
 local function serverHop()
@@ -420,10 +417,6 @@ local function rejoin()
     ts:Teleport(game.PlaceId, player)
 end
 
--- Auto Click
-    end
-end
-
 -- ============================================================
 --  UI
 -- ============================================================
@@ -432,9 +425,6 @@ local function criarUI()
     st.ui=true
 
     gui=Instance.new("ScreenGui") gui.Name="RatHub" gui.ResetOnSpawn=false gui.Parent=player:WaitForChild("PlayerGui")
-
-        end
-    end)
 
     main=Instance.new("Frame") main.Size=UDim2.new(0,200,0,280) main.Position=UDim2.new(0.5,-100,0.5,-140)
     main.BackgroundColor3=cor.fundo main.BackgroundTransparency=0.1 main.Active=true main.Draggable=true main.ClipsDescendants=true main.Parent=gui
@@ -487,6 +477,9 @@ local function criarUI()
     telaPLAYER=Instance.new("ScrollingFrame",main) telaPLAYER.Size=UDim2.new(1,0,0,contentH) telaPLAYER.Position=UDim2.new(0,0,0,contentY) telaPLAYER.BackgroundTransparency=1 telaPLAYER.ScrollBarThickness=3 telaPLAYER.ScrollBarImageColor3=cor.roxo telaPLAYER.BorderSizePixel=0 telaPLAYER.Visible=false
     local layP=Instance.new("UIListLayout",telaPLAYER) layP.Padding=UDim.new(0,5) layP.HorizontalAlignment=Enum.HorizontalAlignment.Center
     local padP=Instance.new("UIPadding",telaPLAYER) padP.PaddingTop=UDim.new(0,8) padP.PaddingBottom=UDim.new(0,6)
+
+    -- SPEED
+    local spdLabel=Instance.new("TextLabel",telaPLAYER) spdLabel.Size=UDim2.new(0.88,0,0,14) spdLabel.BackgroundTransparency=1 spdLabel.Text="VELOCIDADE" spdLabel.TextColor3=cor.roxoC spdLabel.TextSize=9 spdLabel.Font=Enum.Font.GothamBold spdLabel.TextStrokeColor3=Color3.fromRGB(0,0,0) spdLabel.TextStrokeTransparency=0.2
     
     local spdFrame=Instance.new("Frame",telaPLAYER) spdFrame.Size=UDim2.new(0.88,0,0,28) spdFrame.BackgroundTransparency=1
     
@@ -517,6 +510,9 @@ local function criarUI()
         if spdAlways then aplicarSpeed(v) end
         setupAlways()
     end)
+
+    -- SEPARADOR
+    local sepMov=Instance.new("TextLabel",telaPLAYER) sepMov.Size=UDim2.new(0.9,0,0,12) sepMov.BackgroundTransparency=1 sepMov.Text="─ PULO ─" sepMov.TextColor3=cor.branco sepMov.TextSize=8 sepMov.Font=Enum.Font.GothamBold sepMov.TextTransparency=0.2 sepMov.TextStrokeColor3=Color3.fromRGB(0,0,0) sepMov.TextStrokeTransparency=0.2
     
     local jmpFrame=Instance.new("Frame",telaPLAYER) jmpFrame.Size=UDim2.new(0.88,0,0,28) jmpFrame.BackgroundTransparency=1
     
@@ -547,7 +543,9 @@ local function criarUI()
         if jmpAlways then aplicarJump(v) end
         setupAlways()
     end)
-    
+
+    -- SEPARADOR
+    local sepNoc=Instance.new("TextLabel",telaPLAYER) sepNoc.Size=UDim2.new(0.9,0,0,12) sepNoc.BackgroundTransparency=1 sepNoc.Text="─ NOCLIP ─" sepNoc.TextColor3=cor.branco sepNoc.TextSize=8 sepNoc.Font=Enum.Font.GothamBold sepNoc.TextTransparency=0.2 sepNoc.TextStrokeColor3=Color3.fromRGB(0,0,0) sepNoc.TextStrokeTransparency=0.2
 
     -- NOCLIP
     local nocFrame=Instance.new("Frame",telaPLAYER) nocFrame.Size=UDim2.new(0.88,0,0,28) nocFrame.BackgroundTransparency=1
@@ -588,14 +586,12 @@ local function criarUI()
     afkBtn.MouseLeave:Connect(function() ts:Create(afkBtn,TweenInfo.new(0.1),{Size=UDim2.new(0.88,0,0,28),BackgroundColor3=afkOn and cor.verde or cor.roxoE,BackgroundTransparency=0.2}):Play() end)
     afkBtn.MouseButton1Click:Connect(function() toggleAFK(not afkOn); afkBtn.BackgroundColor3=afkOn and cor.verde or cor.roxoE; afkBtn.Text=afkOn and "ANTI AFK ON" or "ANTI AFK" end)
 
-
     -- SPIN BOT
     local spinBtn=Instance.new("TextButton",telaPLAYER) spinBtn.Size=UDim2.new(0.88,0,0,28) spinBtn.BackgroundColor3=cor.roxoE spinBtn.BackgroundTransparency=0.2 spinBtn.Text="SPIN BOT" spinBtn.TextColor3=cor.branco spinBtn.TextSize=9 spinBtn.Font=Enum.Font.GothamBlack spinBtn.TextStrokeColor3=Color3.fromRGB(0,0,0) spinBtn.TextStrokeTransparency=0.2
     Instance.new("UICorner",spinBtn).CornerRadius=UDim.new(0,6)
     spinBtn.MouseEnter:Connect(function() ts:Create(spinBtn,TweenInfo.new(0.08),{Size=UDim2.new(0.9,0,0,30),BackgroundColor3=cor.ciano,BackgroundTransparency=0.1}):Play() end)
     spinBtn.MouseLeave:Connect(function() ts:Create(spinBtn,TweenInfo.new(0.1),{Size=UDim2.new(0.88,0,0,28),BackgroundColor3=spinOn and cor.verde or cor.roxoE,BackgroundTransparency=0.2}):Play() end)
     spinBtn.MouseButton1Click:Connect(function() toggleSpin(not spinOn); spinBtn.BackgroundColor3=spinOn and cor.verde or cor.roxoE; spinBtn.Text=spinOn and "SPIN ON" or "SPIN BOT" end)
-
 
     -- SERVER HOP
     local shBtn=Instance.new("TextButton",telaPLAYER) shBtn.Size=UDim2.new(0.88,0,0,28) shBtn.BackgroundColor3=cor.roxo shBtn.BackgroundTransparency=0.15 shBtn.Text="SERVER HOP" shBtn.TextColor3=cor.branco shBtn.TextSize=9 shBtn.Font=Enum.Font.GothamBlack shBtn.TextStrokeColor3=Color3.fromRGB(0,0,0) shBtn.TextStrokeTransparency=0.2
@@ -610,8 +606,6 @@ local function criarUI()
     rjBtn.MouseEnter:Connect(function() ts:Create(rjBtn,TweenInfo.new(0.08),{Size=UDim2.new(0.9,0,0,30),BackgroundColor3=cor.ciano,BackgroundTransparency=0.05}):Play() end)
     rjBtn.MouseLeave:Connect(function() ts:Create(rjBtn,TweenInfo.new(0.1),{Size=UDim2.new(0.88,0,0,28),BackgroundColor3=cor.roxo,BackgroundTransparency=0.15}):Play() end)
     rjBtn.MouseButton1Click:Connect(rejoin)
-
-    
 
 
     -- ESP
