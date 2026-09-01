@@ -17,10 +17,6 @@ getgenv().Config = getgenv().Config or {
 local espColor = Color3.new(1, 0, 0)
 local fovColor = Color3.new(1, 0, 0)
 local IsDraggingSlider = false
-local markedPosition = nil
-local tpMarker = nil
-local tpMode = false
-local isTeleporting = false
 local stablePosition = nil
 local LastTarget = nil
 
@@ -33,21 +29,563 @@ local SairAimReleaseTime = 0.03
 local SairAimLossConfirmTime = 0.02
 local SairAimCooldown = 0.08
 
-for _, v in pairs(game.CoreGui:GetChildren()) do if v.Name == "PRIDE_HUB" then v:Destroy() end end
-local ScreenGui = Instance.new("ScreenGui", game.CoreGui); ScreenGui.Name = "PRIDE_HUB"; ScreenGui.IgnoreGuiInset = true
+local ESP_Lines = {}
+local ESP_Table = {}
 
-local FOV_Ring = Instance.new("Frame", ScreenGui)
-FOV_Ring.BackgroundTransparency = 1
-FOV_Ring.AnchorPoint = Vector2.new(0.5, 0.5)
-FOV_Ring.Visible = false
-FOV_Ring.ZIndex = 5
-FOV_Ring.BorderSizePixel = 0
-Instance.new("UICorner", FOV_Ring).CornerRadius = UDim.new(1, 0)
-local fovStroke = Instance.new("UIStroke", FOV_Ring)
-fovStroke.Color = fovColor
-fovStroke.Thickness = 2
-fovStroke.Transparency = 0
-fovStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+-- ============================================================
+-- TP STATE
+-- ============================================================
+local TP_SOUND_ID = "rbxassetid://5066021887"
+
+local TPState = {
+    Mode = "NONE",
+    HasMark = false,
+    IsSelecting = false,
+    IsExecuting = false,
+}
+
+local markedPosition = nil
+local tpMarker = nil
+local TPConnections = {}
+
+local previousTPPosition = nil
+local hasPreviousTP = false
+local isBackTP = false
+local backTPBtn = nil
+
+-- ============================================================
+-- TP FORWARD DECLARATIONS
+-- ============================================================
+local ScreenGui
+local tpStatusLabel
+local tpCoordLabel
+local tpOptionFrame
+local CancelDedoSelection
+
+-- ============================================================
+-- TP CONNECTION MANAGEMENT
+-- ============================================================
+
+local function DisconnectTPConnections()
+    for _, connection in pairs(TPConnections) do
+        if connection then
+            connection:Disconnect()
+        end
+    end
+    table.clear(TPConnections)
+end
+
+-- ============================================================
+-- TP CHARACTER HELPERS
+-- ============================================================
+
+local function GetCharacterRoot()
+    local character = LocalPlayer.Character
+    if not character then
+        return nil, nil
+    end
+
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    local root = character:FindFirstChild("HumanoidRootPart")
+
+    if not humanoid or not root then
+        return nil, nil
+    end
+
+    if humanoid.Health <= 0 then
+        return nil, nil
+    end
+
+    return character, root
+end
+
+-- ============================================================
+-- TP UI STATE
+-- ============================================================
+
+local function UpdateTPUI()
+    if not tpStatusLabel or not tpCoordLabel then
+        return
+    end
+
+    if markedPosition and typeof(markedPosition) == "Vector3" then
+        tpStatusLabel.Text = "✅ LOCAL MARCADO"
+        tpStatusLabel.TextColor3 = Color3.fromRGB(80, 255, 120)
+
+        tpCoordLabel.Text = string.format(
+            "X: %.1f | Y: %.1f | Z: %.1f",
+            markedPosition.X,
+            markedPosition.Y,
+            markedPosition.Z
+        )
+    else
+        tpStatusLabel.Text = "❌ LOCAL NÃO MARCADO"
+        tpStatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+        tpCoordLabel.Text = "Nenhuma posição"
+    end
+end
+
+-- ============================================================
+-- TP MARKER
+-- ============================================================
+
+local function UpdateMarker()
+    if tpMarker then
+        tpMarker:Destroy()
+        tpMarker = nil
+    end
+
+    if not markedPosition then
+        return
+    end
+
+    tpMarker = Instance.new("Part")
+    tpMarker.Name = "TP_Marker"
+    tpMarker.Shape = Enum.PartType.Ball
+    tpMarker.Size = Vector3.new(1, 1, 1)
+    tpMarker.Position = markedPosition
+    tpMarker.Anchored = true
+    tpMarker.CanCollide = false
+    tpMarker.CanTouch = false
+    tpMarker.CanQuery = false
+    tpMarker.Material = Enum.Material.Neon
+    tpMarker.Color = Color3.fromRGB(255, 50, 50)
+    tpMarker.Transparency = 0.2
+    tpMarker.Parent = workspace
+
+    local light = Instance.new("PointLight", tpMarker)
+    light.Range = 6
+    light.Color = Color3.fromRGB(255, 50, 50)
+    light.Brightness = 1
+end
+
+-- ============================================================
+-- TP SET/CLEAR MARK
+-- ============================================================
+
+local function SetMarkedPosition(position)
+    if typeof(position) ~= "Vector3" then
+        return false
+    end
+
+    if position ~= position then
+        return false
+    end
+
+    if math.abs(position.X) > 100000 or math.abs(position.Y) > 100000 or math.abs(position.Z) > 100000 then
+        return false
+    end
+
+    markedPosition = position
+    TPState.HasMark = true
+    TPState.Mode = "MARKED"
+
+    UpdateMarker()
+    UpdateTPUI()
+
+    return true
+end
+
+local function ClearMarkedPosition()
+    markedPosition = nil
+    TPState.HasMark = false
+    TPState.Mode = "NONE"
+
+    if tpMarker then
+        tpMarker:Destroy()
+        tpMarker = nil
+    end
+
+    UpdateTPUI()
+end
+
+-- ============================================================
+-- TP SAVE PREVIOUS POSITION
+-- ============================================================
+
+local function SavePreviousTPPosition(position)
+    if typeof(position) ~= "Vector3" then
+        return false
+    end
+
+    previousTPPosition = position
+    hasPreviousTP = true
+
+    if backTPBtn then
+        backTPBtn.Visible = true
+    end
+
+    return true
+end
+
+-- ============================================================
+-- TP RAYCAST
+-- ============================================================
+
+local function GetWorldPositionFromScreenPosition(screenPosition)
+    if not Camera then return nil end
+
+    local ray = Camera:ViewportPointToRay(screenPosition.X, screenPosition.Y)
+
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+    raycastParams.FilterDescendantsInstances = {}
+
+    local character = LocalPlayer.Character
+    if character then
+        table.insert(raycastParams.FilterDescendantsInstances, character)
+    end
+
+    if tpMarker then
+        table.insert(raycastParams.FilterDescendantsInstances, tpMarker)
+    end
+
+    local result = workspace:Raycast(ray.Origin, ray.Direction * 1000, raycastParams)
+
+    if result then
+        return result.Position
+    end
+
+    return nil
+end
+
+-- ============================================================
+-- TP INPUT HELPERS
+-- ============================================================
+
+local function GetInputScreenPosition(input)
+    if input.UserInputType == Enum.UserInputType.Touch then
+        return Vector2.new(input.Position.X, input.Position.Y)
+    end
+
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        local mousePosition = UserInputService:GetMouseLocation()
+        return Vector2.new(mousePosition.X, mousePosition.Y)
+    end
+
+    return nil
+end
+
+local function IsInputOverOurUI(position)
+    if not ScreenGui then return false end
+
+    local objects = ScreenGui:GetGuiObjectsAtPosition(position.X, position.Y)
+
+    for _, obj in ipairs(objects) do
+        if obj:IsA("GuiObject") and obj.Visible then
+            return true
+        end
+    end
+
+    return false
+end
+
+-- ============================================================
+-- TP MARKING
+-- ============================================================
+
+local function MarkCurrentPosition()
+    local character, root = GetCharacterRoot()
+
+    if not character or not root then
+        ShowNotification("SEM PERSONAGEM", false)
+        return false
+    end
+
+    return SetMarkedPosition(root.Position)
+end
+
+local function StartDedoSelection()
+    if TPState.IsSelecting then return end
+
+    TPState.IsSelecting = true
+    TPState.Mode = "MARKING"
+
+    DisconnectTPConnections()
+
+    TPConnections.Input = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if not TPState.IsSelecting then return end
+
+        if gameProcessed then return end
+
+        if input.UserInputType ~= Enum.UserInputType.Touch and input.UserInputType ~= Enum.UserInputType.MouseButton1 then
+            return
+        end
+
+        local screenPosition = GetInputScreenPosition(input)
+
+        if not screenPosition then return end
+
+        if IsInputOverOurUI(screenPosition) then
+            return
+        end
+
+        local worldPosition = GetWorldPositionFromScreenPosition(screenPosition)
+
+        if not worldPosition then
+            ShowNotification("LOCAL INVÁLIDO", false)
+            return
+        end
+
+        if SetMarkedPosition(worldPosition) then
+            CancelDedoSelection()
+            playPopSound()
+            ShowNotification("MARCADO", true)
+        end
+    end)
+
+    ShowNotification("TOQUE NA TELA", true)
+end
+
+CancelDedoSelection = function()
+    TPState.IsSelecting = false
+
+    if TPState.Mode == "MARKING" then
+        TPState.Mode = "NONE"
+    end
+
+    DisconnectTPConnections()
+    UpdateTPUI()
+end
+
+-- ============================================================
+-- TP TELEPORT CENTRAL
+-- ============================================================
+
+local function CreateTeleportEffect(position)
+    if typeof(position) ~= "Vector3" then return end
+
+    local effect = Instance.new("Part")
+    effect.Name = "TP_Effect"
+    effect.Shape = Enum.PartType.Ball
+    effect.Size = Vector3.new(0.5, 0.5, 0.5)
+    effect.Position = position
+    effect.Anchored = true
+    effect.CanCollide = false
+    effect.CanTouch = false
+    effect.CanQuery = false
+    effect.Material = Enum.Material.Neon
+    effect.Color = Color3.fromRGB(0, 200, 255)
+    effect.Transparency = 0
+    effect.Parent = workspace
+
+    local light = Instance.new("PointLight", effect)
+    light.Range = 8
+    light.Color = Color3.fromRGB(0, 200, 255)
+    light.Brightness = 2
+
+    ts:Create(effect, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Size = Vector3.new(3, 3, 3),
+        Transparency = 1
+    }):Play()
+
+    task.delay(0.5, function()
+        if effect and effect.Parent then
+            effect:Destroy()
+        end
+    end)
+end
+
+local function PlayTeleportSound()
+    local sound = Instance.new("Sound")
+    sound.SoundId = TP_SOUND_ID
+    sound.Volume = 0.5
+    sound.Parent = SoundService
+    sound:Play()
+
+    sound.Ended:Connect(function()
+        sound:Destroy()
+    end)
+
+    task.delay(2, function()
+        if sound and sound.Parent then
+            sound:Destroy()
+        end
+    end)
+end
+
+local function TeleportToPosition(targetPosition)
+    if typeof(targetPosition) ~= "Vector3" then
+        return false
+    end
+
+    if targetPosition ~= targetPosition then
+        return false
+    end
+
+    if math.abs(targetPosition.X) > 100000 or math.abs(targetPosition.Y) > 100000 or math.abs(targetPosition.Z) > 100000 then
+        return false
+    end
+
+    if TPState.IsExecuting then
+        return false
+    end
+
+    local character, root = GetCharacterRoot()
+
+    if not character or not root then
+        return false
+    end
+
+    local originPosition = root.Position
+
+    TPState.IsExecuting = true
+
+    local success, err = pcall(function()
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
+        character:PivotTo(CFrame.new(targetPosition))
+    end)
+
+    TPState.IsExecuting = false
+
+    if not success then
+        return false
+    end
+
+    task.wait(0.05)
+
+    local currentCharacter, currentRoot = GetCharacterRoot()
+    if not currentCharacter or not currentRoot then
+        return false
+    end
+
+    local distance = (currentRoot.Position - targetPosition).Magnitude
+
+    if distance <= 10 then
+        CreateTeleportEffect(targetPosition)
+        PlayTeleportSound()
+        return true, originPosition
+    end
+
+    return false
+end
+
+local function TeleportToMarkedPosition()
+    if not markedPosition then
+        ShowNotification("NENHUM LOCAL MARCADO", false)
+        return false
+    end
+
+    local success, originPosition = TeleportToPosition(markedPosition)
+
+    if success then
+        SavePreviousTPPosition(originPosition)
+        ShowNotification("TELEPORTADO", true)
+        return true
+    else
+        ShowNotification("TP FALHOU", false)
+        return false
+    end
+end
+
+local function TeleportBack()
+    if not hasPreviousTP or not previousTPPosition then
+        ShowNotification("SEM LOCAL ANTERIOR", false)
+        return false
+    end
+
+    if TPState.IsExecuting then
+        return false
+    end
+
+    isBackTP = true
+
+    local success = TeleportToPosition(previousTPPosition)
+
+    isBackTP = false
+
+    if success then
+        ShowNotification("VOLTADO", true)
+        return true
+    else
+        ShowNotification("VOLTA FALHOU", false)
+        return false
+    end
+end
+
+-- ============================================================
+-- NOTIFICATION SYSTEM
+-- ============================================================
+
+local NotifFrame, NotifLabel, NotifIcon
+local NotifToken = 0
+
+local function CreateNotification()
+    if NotifFrame then return end
+    NotifFrame = Instance.new("Frame", ScreenGui)
+    NotifFrame.Size = UDim2.new(0, 240, 0, 50)
+    NotifFrame.AnchorPoint = Vector2.new(0.5, 0)
+    NotifFrame.Position = UDim2.new(0.5, 0, 0, -60)
+    NotifFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+    NotifFrame.BackgroundTransparency = 0.05
+    NotifFrame.BorderSizePixel = 0
+    NotifFrame.Visible = false
+    NotifFrame.ZIndex = 1000
+    CreateCorner(NotifFrame, 12)
+    local stroke = Instance.new("UIStroke", NotifFrame)
+    stroke.Color = Color3.fromRGB(100, 100, 110)
+    stroke.Thickness = 1
+    stroke.Transparency = 0.3
+    NotifIcon = Instance.new("TextLabel", NotifFrame)
+    NotifIcon.Size = UDim2.new(0, 30, 1, 0)
+    NotifIcon.Position = UDim2.new(0, 10, 0, 0)
+    NotifIcon.BackgroundTransparency = 1
+    NotifIcon.Text = "✓"
+    NotifIcon.TextColor3 = Color3.fromRGB(80, 255, 120)
+    NotifIcon.TextSize = 20
+    NotifIcon.Font = Enum.Font.GothamBlack
+    NotifIcon.ZIndex = 1001
+    NotifLabel = Instance.new("TextLabel", NotifFrame)
+    NotifLabel.Size = UDim2.new(1, -50, 1, 0)
+    NotifLabel.Position = UDim2.new(0, 45, 0, 0)
+    NotifLabel.BackgroundTransparency = 1
+    NotifLabel.Text = ""
+    NotifLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    NotifLabel.TextSize = 14
+    NotifLabel.Font = Enum.Font.GothamBold
+    NotifLabel.TextXAlignment = Enum.TextXAlignment.Left
+    NotifLabel.TextYAlignment = Enum.TextYAlignment.Center
+    NotifLabel.ZIndex = 1001
+end
+
+local function ShowNotification(text, enabled)
+    CreateNotification()
+    NotifToken = NotifToken + 1
+    local token = NotifToken
+    if enabled == false then
+        NotifIcon.Text = "×"
+        NotifIcon.TextColor3 = Color3.fromRGB(255, 100, 100)
+    else
+        NotifIcon.Text = "✓"
+        NotifIcon.TextColor3 = Color3.fromRGB(80, 255, 120)
+    end
+    NotifLabel.Text = text
+    NotifFrame.Visible = true
+    NotifFrame.Position = UDim2.new(0.5, 0, 0, -60)
+    ts:Create(NotifFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2.new(0.5, 0, 0, 10)}):Play()
+    task.delay(1.5, function()
+        if token ~= NotifToken then return end
+        local hide = ts:Create(NotifFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {Position = UDim2.new(0.5, 0, 0, -60)})
+        hide:Play()
+        hide.Completed:Connect(function()
+            if token == NotifToken then NotifFrame.Visible = false end
+        end)
+    end)
+end
+
+local function playPopSound()
+    local sound = Instance.new("Sound")
+    sound.SoundId = "rbxassetid://12222203"
+    sound.Volume = 0.5
+    sound.Parent = SoundService
+    sound:Play()
+    task.delay(0.3, function() sound:Destroy() end)
+end
+
+-- ============================================================
+-- UI HELPERS
+-- ============================================================
 
 local function CreateCorner(obj, radius)
     local c = Instance.new("UICorner")
@@ -91,101 +629,25 @@ local function CreateSectionLabel(parent, text)
     return container
 end
 
-local NotifFrame, NotifLabel, NotifIcon
-local NotifToken = 0
+-- ============================================================
+-- UI CREATION
+-- ============================================================
 
-local function CreateNotification()
-    if NotifFrame then return end
-    NotifFrame = Instance.new("Frame", ScreenGui)
-    NotifFrame.Size = UDim2.new(0, 170, 0, 36)
-    NotifFrame.AnchorPoint = Vector2.new(0.5, 0)
-    NotifFrame.Position = UDim2.new(0.5, 0, 0, -45)
-    NotifFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
-    NotifFrame.BackgroundTransparency = 0.05
-    NotifFrame.BorderSizePixel = 0
-    NotifFrame.Visible = false
-    NotifFrame.ZIndex = 1000
-    CreateCorner(NotifFrame, 10)
-    local stroke = Instance.new("UIStroke", NotifFrame)
-    stroke.Color = Color3.fromRGB(100, 100, 110)
-    stroke.Thickness = 1
-    stroke.Transparency = 0.3
-    NotifIcon = Instance.new("TextLabel", NotifFrame)
-    NotifIcon.Size = UDim2.new(0, 22, 1, 0)
-    NotifIcon.Position = UDim2.new(0, 7, 0, 0)
-    NotifIcon.BackgroundTransparency = 1
-    NotifIcon.Text = "✓"
-    NotifIcon.TextColor3 = Color3.fromRGB(80, 255, 120)
-    NotifIcon.TextSize = 14
-    NotifIcon.Font = Enum.Font.GothamBlack
-    NotifIcon.ZIndex = 1001
-    NotifLabel = Instance.new("TextLabel", NotifFrame)
-    NotifLabel.Size = UDim2.new(1, -35, 1, 0)
-    NotifLabel.Position = UDim2.new(0, 32, 0, 0)
-    NotifLabel.BackgroundTransparency = 1
-    NotifLabel.Text = ""
-    NotifLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    NotifLabel.TextSize = 10
-    NotifLabel.Font = Enum.Font.GothamBold
-    NotifLabel.TextXAlignment = Enum.TextXAlignment.Left
-    NotifLabel.TextYAlignment = Enum.TextYAlignment.Center
-    NotifLabel.ZIndex = 1001
-end
+for _, v in pairs(game.CoreGui:GetChildren()) do if v.Name == "PRIDE_HUB" then v:Destroy() end end
+ScreenGui = Instance.new("ScreenGui", game.CoreGui); ScreenGui.Name = "PRIDE_HUB"; ScreenGui.IgnoreGuiInset = true
 
-local function ShowNotification(text, enabled)
-    CreateNotification()
-    NotifToken = NotifToken + 1
-    local token = NotifToken
-    if enabled == false then
-        NotifIcon.Text = "×"
-        NotifIcon.TextColor3 = Color3.fromRGB(255, 100, 100)
-    else
-        NotifIcon.Text = "✓"
-        NotifIcon.TextColor3 = Color3.fromRGB(80, 255, 120)
-    end
-    NotifLabel.Text = text
-    NotifFrame.Visible = true
-    NotifFrame.Position = UDim2.new(0.5, 0, 0, -45)
-    ts:Create(NotifFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {Position = UDim2.new(0.5, 0, 0, 8)}):Play()
-    task.delay(1.3, function()
-        if token ~= NotifToken then return end
-        local hide = ts:Create(NotifFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {Position = UDim2.new(0.5, 0, 0, -45)})
-        hide:Play()
-        hide.Completed:Connect(function()
-            if token == NotifToken then NotifFrame.Visible = false end
-        end)
-    end)
-end
-
-local function playPopSound()
-    local sound = Instance.new("Sound")
-    sound.SoundId = "rbxassetid://12222203"
-    sound.Volume = 0.5
-    sound.Parent = SoundService
-    sound:Play()
-    task.delay(0.3, function() sound:Destroy() end)
-end
-
-local function UpdateMarker()
-    if tpMarker then tpMarker:Destroy(); tpMarker = nil end
-    if markedPosition then
-        tpMarker = Instance.new("Part")
-        tpMarker.Name = "TP_Marker"
-        tpMarker.Shape = Enum.PartType.Ball
-        tpMarker.Size = Vector3.new(1, 1, 1)
-        tpMarker.Position = markedPosition
-        tpMarker.Anchored = true
-        tpMarker.CanCollide = false
-        tpMarker.Material = Enum.Material.Neon
-        tpMarker.Color = Color3.fromRGB(255, 50, 50)
-        tpMarker.Transparency = 0.2
-        tpMarker.Parent = workspace
-        local light = Instance.new("PointLight", tpMarker)
-        light.Range = 6
-        light.Color = Color3.fromRGB(255, 50, 50)
-        light.Brightness = 1
-    end
-end
+local FOV_Ring = Instance.new("Frame", ScreenGui)
+FOV_Ring.BackgroundTransparency = 1
+FOV_Ring.AnchorPoint = Vector2.new(0.5, 0.5)
+FOV_Ring.Visible = false
+FOV_Ring.ZIndex = 5
+FOV_Ring.BorderSizePixel = 0
+Instance.new("UICorner", FOV_Ring).CornerRadius = UDim.new(1, 0)
+local fovStroke = Instance.new("UIStroke", FOV_Ring)
+fovStroke.Color = fovColor
+fovStroke.Thickness = 2
+fovStroke.Transparency = 0
+fovStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 
 local Main = Instance.new("Frame", ScreenGui)
 Main.Size = UDim2.new(0, 200, 0, 290)
@@ -280,6 +742,7 @@ local minimizado = false
 
 btnMin.MouseButton1Click:Connect(function()
     minimizado = not minimizado
+    CancelDedoSelection()
     if minimizado then
         Main.Visible = false
         Icon.Visible = true
@@ -302,6 +765,7 @@ Icon.MouseButton1Click:Connect(function()
 end)
 
 CloseBtn.MouseButton1Click:Connect(function()
+    CancelDedoSelection()
     Main.Visible = false
     Icon.Visible = false
 end)
@@ -659,7 +1123,6 @@ local function AddSliderVertical(name, prop, parent, max, min, suffix)
     return frame
 end
 
--- SAIR AIM FUNCTIONS
 local sairAimInput = nil
 local sairAimContadorLabel = nil
 
@@ -702,7 +1165,6 @@ local function ProcessarSairAim(Target)
     end
 end
 
--- ABA AIM
 CreateSectionLabel(telaAIM, "AIMBOT")
 AddToggleVertical("ATIVAR AIM", "AimbotActive", telaAIM)
 AddToggleVertical("TIME", "CheckTeam", telaAIM)
@@ -787,7 +1249,6 @@ criarSeletorCores(telaAIM, function(cor)
     fovStroke.Color = cor
 end)
 
--- ABA ESP
 CreateSectionLabel(telaESP, "ESP")
 AddToggleVertical("ESP NOME", "ESP", telaESP)
 AddToggleVertical("ESP BOX", "ESP_Box", telaESP)
@@ -807,28 +1268,29 @@ criarSeletorCores(telaESP, function(cor)
     end
 end)
 
--- ABA TP
 CreateSectionLabel(telaTP, "TELEPORTE")
 
-local tpStatusLabel = Instance.new("TextLabel", telaTP)
+tpStatusLabel = Instance.new("TextLabel", telaTP)
 tpStatusLabel.Size = UDim2.new(0.9, 0, 0, 18)
 tpStatusLabel.BackgroundTransparency = 1
-tpStatusLabel.Text = markedPosition and "✅ LOCAL MARCADO" or "❌ LOCAL NÃO MARCADO"
-tpStatusLabel.TextColor3 = markedPosition and Color3.fromRGB(80, 255, 120) or Color3.fromRGB(255, 100, 100)
+tpStatusLabel.Text = "❌ LOCAL NÃO MARCADO"
+tpStatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
 tpStatusLabel.TextSize = 10
 tpStatusLabel.Font = Enum.Font.GothamBold
 tpStatusLabel.TextXAlignment = Enum.TextXAlignment.Center
 tpStatusLabel.LayoutOrder = 1
 
-local tpCoordLabel = Instance.new("TextLabel", telaTP)
+tpCoordLabel = Instance.new("TextLabel", telaTP)
 tpCoordLabel.Size = UDim2.new(0.9, 0, 0, 18)
 tpCoordLabel.BackgroundTransparency = 1
-tpCoordLabel.Text = markedPosition and string.format("X: %d  Y: %d  Z: %d", math.floor(markedPosition.X), math.floor(markedPosition.Y), math.floor(markedPosition.Z)) or ""
+tpCoordLabel.Text = "Nenhuma posição"
 tpCoordLabel.TextColor3 = Color3.fromRGB(220, 60, 60)
 tpCoordLabel.TextSize = 9
 tpCoordLabel.Font = Enum.Font.GothamBold
 tpCoordLabel.TextXAlignment = Enum.TextXAlignment.Center
 tpCoordLabel.LayoutOrder = 2
+
+UpdateTPUI()
 
 local marcarBtn = Instance.new("TextButton", telaTP)
 marcarBtn.Size = UDim2.new(0.9, 0, 0, 34)
@@ -844,11 +1306,17 @@ CreateCorner(marcarBtn, 7)
 CreateStroke(marcarBtn, Color3.fromRGB(160, 25, 25), 1.5, 0.3)
 
 marcarBtn.MouseButton1Click:Connect(function()
-    local optFrame = Instance.new("Frame", telaTP)
-    optFrame.Size = UDim2.new(0.9, 0, 0, 34)
-    optFrame.BackgroundTransparency = 1
-    optFrame.LayoutOrder = 4
-    local dedoBtn = Instance.new("TextButton", optFrame)
+    if tpOptionFrame then
+        tpOptionFrame:Destroy()
+        tpOptionFrame = nil
+    end
+
+    tpOptionFrame = Instance.new("Frame", telaTP)
+    tpOptionFrame.Size = UDim2.new(0.9, 0, 0, 34)
+    tpOptionFrame.BackgroundTransparency = 1
+    tpOptionFrame.LayoutOrder = 4
+
+    local dedoBtn = Instance.new("TextButton", tpOptionFrame)
     dedoBtn.Size = UDim2.new(0.48, 0, 0, 30)
     dedoBtn.Position = UDim2.new(0, 0, 0, 2)
     dedoBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 46)
@@ -860,7 +1328,8 @@ marcarBtn.MouseButton1Click:Connect(function()
     dedoBtn.AutoButtonColor = false
     CreateCorner(dedoBtn, 7)
     CreateStroke(dedoBtn, Color3.fromRGB(160, 25, 25), 1, 0.4)
-    local agoraBtn = Instance.new("TextButton", optFrame)
+
+    local agoraBtn = Instance.new("TextButton", tpOptionFrame)
     agoraBtn.Size = UDim2.new(0.48, 0, 0, 30)
     agoraBtn.Position = UDim2.new(0.52, 0, 0, 2)
     agoraBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 46)
@@ -872,27 +1341,34 @@ marcarBtn.MouseButton1Click:Connect(function()
     agoraBtn.AutoButtonColor = false
     CreateCorner(agoraBtn, 7)
     CreateStroke(agoraBtn, Color3.fromRGB(160, 25, 25), 1, 0.4)
+
     dedoBtn.MouseButton1Click:Connect(function()
-        optFrame:Destroy()
-        tpMode = true
-        ShowNotification("TOQUE NA TELA", true)
+        tpOptionFrame:Destroy()
+        tpOptionFrame = nil
+        StartDedoSelection()
     end)
+
     agoraBtn.MouseButton1Click:Connect(function()
-        optFrame:Destroy()
-        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-            markedPosition = LocalPlayer.Character.HumanoidRootPart.Position
-            UpdateMarker()
+        tpOptionFrame:Destroy()
+        tpOptionFrame = nil
+        CancelDedoSelection()
+        DisconnectTPConnections()
+        if MarkCurrentPosition() then
             playPopSound()
             ShowNotification("MARCADO", true)
-            tpStatusLabel.Text = "✅ LOCAL MARCADO"
-            tpStatusLabel.TextColor3 = Color3.fromRGB(80, 255, 120)
-            tpCoordLabel.Text = string.format("X: %d  Y: %d  Z: %d", math.floor(markedPosition.X), math.floor(markedPosition.Y), math.floor(markedPosition.Z))
         end
     end)
 end)
 
-local tpBtn = Instance.new("TextButton", telaTP)
-tpBtn.Size = UDim2.new(0.9, 0, 0, 34)
+-- Frame para botões TP e VOLTAR
+local tpButtonFrame = Instance.new("Frame", telaTP)
+tpButtonFrame.Size = UDim2.new(0.9, 0, 0, 34)
+tpButtonFrame.BackgroundTransparency = 1
+tpButtonFrame.LayoutOrder = 5
+
+local tpBtn = Instance.new("TextButton", tpButtonFrame)
+tpBtn.Size = UDim2.new(0.78, 0, 0, 34)
+tpBtn.Position = UDim2.new(0, 0, 0, 0)
 tpBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 36)
 tpBtn.BackgroundTransparency = 0.05
 tpBtn.Text = "🌀 TELEPORTAR"
@@ -900,59 +1376,46 @@ tpBtn.TextColor3 = Color3.new(1, 1, 1)
 tpBtn.TextSize = 11
 tpBtn.Font = Enum.Font.GothamBold
 tpBtn.AutoButtonColor = false
-tpBtn.LayoutOrder = 5
 CreateCorner(tpBtn, 7)
 CreateStroke(tpBtn, Color3.fromRGB(160, 25, 25), 1.5, 0.3)
 
+backTPBtn = Instance.new("TextButton", tpButtonFrame)
+backTPBtn.Size = UDim2.new(0, 38, 0, 34)
+backTPBtn.Position = UDim2.new(0.82, 4, 0, 0)
+backTPBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 36)
+backTPBtn.BackgroundTransparency = 0.05
+backTPBtn.Text = "⬅️"
+backTPBtn.TextColor3 = Color3.new(1, 1, 1)
+backTPBtn.TextSize = 14
+backTPBtn.Font = Enum.Font.GothamBold
+backTPBtn.AutoButtonColor = false
+backTPBtn.Visible = false
+CreateCorner(backTPBtn, 7)
+CreateStroke(backTPBtn, Color3.fromRGB(160, 25, 25), 1.5, 0.3)
+
 tpBtn.MouseButton1Click:Connect(function()
-    if isTeleporting then return end
-    if not markedPosition then
-        ShowNotification("NENHUM LOCAL MARCADO", false)
-        return
-    end
-    local char = LocalPlayer.Character
-    if not char then
-        ShowNotification("SEM PERSONAGEM", false)
-        return
-    end
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-    if not hrp then
-        ShowNotification("AGUARDE RESPAWN", false)
-        return
-    end
-    isTeleporting = true
-    hrp.CFrame = CFrame.new(markedPosition)
-    playPopSound()
-    ShowNotification("TELEPORTADO", true)
-    task.delay(0.3, function() isTeleporting = false end)
+    TeleportToMarkedPosition()
 end)
 
-UserInputService.InputBegan:Connect(function(input)
-    if tpMode then
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            tpMode = false
-            local ray = Camera:ViewportPointToRay(input.Position.X, input.Position.Y)
-            local raycastParams = RaycastParams.new()
-            raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-            raycastParams.FilterDescendantsInstances = {LocalPlayer.Character}
-            local result = workspace:Raycast(ray.Origin, ray.Direction * 1000, raycastParams)
-            if result then
-                markedPosition = result.Position
-                UpdateMarker()
-                playPopSound()
-                ShowNotification("MARCADO", true)
-                tpStatusLabel.Text = "✅ LOCAL MARCADO"
-                tpStatusLabel.TextColor3 = Color3.fromRGB(80, 255, 120)
-                tpCoordLabel.Text = string.format("X: %d  Y: %d  Z: %d", math.floor(markedPosition.X), math.floor(markedPosition.Y), math.floor(markedPosition.Z))
-            end
-        end
-    end
+backTPBtn.MouseButton1Click:Connect(function()
+    AnimateButton(backTPBtn, {Size = UDim2.new(0, 34, 0, 30)}, 0.08)
+    TeleportBack()
+    AnimateButton(backTPBtn, {Size = UDim2.new(0, 38, 0, 34)}, 0.08)
 end)
 
 local function selecionarAba(aba)
     telaAIM.Visible = (aba == "aim")
     telaESP.Visible = (aba == "esp")
     telaTP.Visible = (aba == "tp")
+
+    if aba ~= "tp" then
+        CancelDedoSelection()
+        if tpOptionFrame then
+            tpOptionFrame:Destroy()
+            tpOptionFrame = nil
+        end
+    end
+
     if aba == "aim" then
         ts:Create(abaAIM, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(140, 20, 20), BackgroundTransparency = 0.1, TextColor3 = Color3.new(1, 1, 1)}):Play()
         ts:Create(abaESP, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(24, 24, 30), BackgroundTransparency = 0.15, TextColor3 = Color3.fromRGB(140, 140, 150)}):Play()
@@ -975,9 +1438,6 @@ abaAIM.MouseButton1Click:Connect(function() selecionarAba("aim") end)
 abaESP.MouseButton1Click:Connect(function() selecionarAba("esp") end)
 abaTP.MouseButton1Click:Connect(function() selecionarAba("tp") end)
 selecionarAba("aim")
-
-local ESP_Lines = {}
-local ESP_Table = {}
 
 local function MakeESP(p)
     if p == LocalPlayer then return end
@@ -1021,8 +1481,10 @@ RunService.RenderStepped:Connect(function(dt)
     FOV_Ring.Visible = cfg.FOVVisible
     FOV_Ring.Size = UDim2.new(0, cfg.Radius * 2, 0, cfg.Radius * 2)
     FOV_Ring.Position = UDim2.new(0, Camera.ViewportSize.X / 2, 0, Camera.ViewportSize.Y / 2)
+
     local Target = nil
     local MaxDist = cfg.Radius
+
     for p, obj in pairs(ESP_Table) do
         local line = ESP_Lines[p]
         if p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character:FindFirstChild("Humanoid") and p.Character.Humanoid.Health > 0 then
@@ -1050,6 +1512,7 @@ RunService.RenderStepped:Connect(function(dt)
                 local hp = p.Character.Humanoid.Health / p.Character.Humanoid.MaxHealth
                 obj.HMain.Size = UDim2.new(1, 0, hp, 0)
                 obj.HMain.Position = UDim2.new(0, 0, 1-hp, 0)
+
                 if cfg.AimbotActive then
                     local dist = (Vector2.new(pos.X, pos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
                     if dist < MaxDist then
@@ -1080,9 +1543,9 @@ RunService.RenderStepped:Connect(function(dt)
             obj.HBack.Visible = false
         end
     end
-    
+
     ProcessarSairAim(Target)
-    
+
     if Target then
         if Target ~= LastTarget then
             stablePosition = Target.Position
@@ -1108,6 +1571,7 @@ RunService.RenderStepped:Connect(function(dt)
             stablePosition = Target.Position
             aimPosition = Target.Position
         end
+
         if cfg.AimbotActive and AimPermitido then
             local targetCF = CFrame.lookAt(Camera.CFrame.Position, aimPosition)
             if cfg.AimInstant then
