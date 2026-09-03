@@ -627,21 +627,21 @@ local function CreateFreecamJoystick()
     freecamJoystickOuter.Size = UDim2.fromOffset(sizeOuter, sizeOuter)
     freecamJoystickOuter.Position = UDim2.new(0.15, 0, 0.75, 0)
     freecamJoystickOuter.AnchorPoint = Vector2.new(0.5, 0.5)
-    freecamJoystickOuter.BackgroundColor3 = Color3.fromRGB(30, 15, 45)
+    freecamJoystickOuter.BackgroundColor3 = Color3.fromRGB(35, 20, 50)
     freecamJoystickOuter.BackgroundTransparency = 0.3
     freecamJoystickOuter.Parent = freecamJoystick
     freecamJoystickOuter.ZIndex = 551
     freecamJoystickOuter.Active = true
     Instance.new("UICorner", freecamJoystickOuter).CornerRadius = UDim.new(1, 0)
     local outerStroke = Instance.new("UIStroke", freecamJoystickOuter)
-    outerStroke.Color = Color3.fromRGB(160, 50, 200)
-    outerStroke.Transparency = 0.5
+    outerStroke.Color = Color3.fromRGB(180, 80, 220)
+    outerStroke.Transparency = 0.4
     outerStroke.Thickness = 2
 
     freecamJoystickInner = Instance.new("Frame")
     freecamJoystickInner.Size = UDim2.fromOffset(sizeInner, sizeInner)
     freecamJoystickInner.Position = UDim2.new(0.5, -sizeInner / 2, 0.5, -sizeInner / 2)
-    freecamJoystickInner.BackgroundColor3 = Color3.fromRGB(200, 100, 220)
+    freecamJoystickInner.BackgroundColor3 = Color3.fromRGB(200, 120, 240)
     freecamJoystickInner.BackgroundTransparency = 0.2
     freecamJoystickInner.Parent = freecamJoystickOuter
     freecamJoystickInner.ZIndex = 552
@@ -842,7 +842,7 @@ local function MakeShortcutDraggable(button)
 end
 
 -- ============================================================
--- NOTIFICATION SYSTEM (MELHORADO - COM AJUSTE AUTOMÁTICO DE TAMANHO)
+-- NOTIFICATION SYSTEM (CORES VIVAS)
 -- ============================================================
 local NotifFrame, NotifLabel, NotifIcon
 local NotifToken = 0
@@ -850,72 +850,57 @@ local NotifToken = 0
 local function CreateNotification()
     if NotifFrame then return end
     NotifFrame = Instance.new("Frame")
-    NotifFrame.Size = UDim2.new(0, 260, 0, 55)
+    NotifFrame.Size = UDim2.new(0, 220, 0, 45)
     NotifFrame.AnchorPoint = Vector2.new(0.5, 0)
     NotifFrame.Position = UDim2.new(0.5, 0, 0, -60)
-    NotifFrame.BackgroundColor3 = Color3.fromRGB(30, 15, 45)
-    NotifFrame.BackgroundTransparency = 0.03
+    NotifFrame.BackgroundColor3 = Color3.fromRGB(40, 20, 60)
+    NotifFrame.BackgroundTransparency = 0
     NotifFrame.BorderSizePixel = 0
     NotifFrame.Visible = false
     NotifFrame.ZIndex = 1000
     NotifFrame.Parent = ScreenGui
-    NotifFrame.ClipsDescendants = true
     
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 14)
+    corner.CornerRadius = UDim.new(0, 10)
     corner.Parent = NotifFrame
     
     local stroke = Instance.new("UIStroke")
-    stroke.Color = Color3.fromRGB(160, 50, 200)
+    stroke.Color = Color3.fromRGB(180, 80, 220)
     stroke.Thickness = 1.5
     stroke.Transparency = 0.2
     stroke.Parent = NotifFrame
-    
+
     local grad = Instance.new("UIGradient", NotifFrame)
     grad.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(50, 20, 80)),
-        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(80, 30, 110)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(50, 20, 80))
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(60, 25, 90)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(90, 35, 120)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(60, 25, 90))
     })
     grad.Rotation = 90
 
-    -- Ícone com fundo circular
-    local iconBg = Instance.new("Frame")
-    iconBg.Size = UDim2.new(0, 36, 0, 36)
-    iconBg.Position = UDim2.new(0, 8, 0.5, -18)
-    iconBg.BackgroundColor3 = Color3.fromRGB(160, 50, 200)
-    iconBg.BackgroundTransparency = 0.3
-    iconBg.ZIndex = 1001
-    iconBg.Parent = NotifFrame
-    Instance.new("UICorner", iconBg).CornerRadius = UDim.new(1, 0)
-    local iconBgStroke = Instance.new("UIStroke", iconBg)
-    iconBgStroke.Color = Color3.fromRGB(200, 100, 220)
-    iconBgStroke.Thickness = 1
-    iconBgStroke.Transparency = 0.4
-
     NotifIcon = Instance.new("TextLabel")
-    NotifIcon.Size = UDim2.new(1, 0, 1, 0)
+    NotifIcon.Size = UDim2.new(0, 30, 1, 0)
+    NotifIcon.Position = UDim2.new(0, 8, 0, 0)
     NotifIcon.BackgroundTransparency = 1
-    NotifIcon.Text = "✓"
-    NotifIcon.TextColor3 = Color3.new(1, 1, 1)
-    NotifIcon.TextSize = 18
-    NotifIcon.Font = Enum.Font.GothamBlack
-    NotifIcon.ZIndex = 1002
-    NotifIcon.Parent = iconBg
+    NotifIcon.Text = ""
+    NotifIcon.TextColor3 = Color3.fromRGB(200, 120, 240)
+    NotifIcon.TextSize = 16
+    NotifIcon.Font = Enum.Font.GothamBold
+    NotifIcon.ZIndex = 1001
+    NotifIcon.Parent = NotifFrame
     
     NotifLabel = Instance.new("TextLabel")
-    NotifLabel.Size = UDim2.new(1, -55, 1, 0)
-    NotifLabel.Position = UDim2.new(0, 50, 0, 0)
+    NotifLabel.Size = UDim2.new(1, -45, 1, 0)
+    NotifLabel.Position = UDim2.new(0, 40, 0, 0)
     NotifLabel.BackgroundTransparency = 1
     NotifLabel.Text = ""
-    NotifLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    NotifLabel.TextSize = 13
-    NotifLabel.Font = Enum.Font.GothamBold
+    NotifLabel.TextColor3 = Color3.fromRGB(240, 235, 245)
+    NotifLabel.TextSize = 12
+    NotifLabel.Font = Enum.Font.GothamMedium
     NotifLabel.TextXAlignment = Enum.TextXAlignment.Left
     NotifLabel.TextYAlignment = Enum.TextYAlignment.Center
     NotifLabel.ZIndex = 1001
     NotifLabel.Parent = NotifFrame
-    NotifLabel.TextTruncate = Enum.TextTruncate.None
     NotifLabel.TextWrapped = true
 end
 
@@ -925,38 +910,30 @@ local function ShowNotification(text, enabled)
     local token = NotifToken
     
     if enabled == false then
-        NotifIcon.Text = "×"
-        NotifIcon.Parent.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+        NotifIcon.Text = "✕"
+        NotifIcon.TextColor3 = Color3.fromRGB(255, 120, 120)
     else
         NotifIcon.Text = "✓"
-        NotifIcon.Parent.BackgroundColor3 = Color3.fromRGB(160, 50, 200)
+        NotifIcon.TextColor3 = Color3.fromRGB(120, 255, 160)
     end
     
     NotifLabel.Text = text
     
-    -- Ajustar largura baseado no texto
-    local textWidth = NotifLabel.TextBounds.X
-    local newWidth = math.clamp(textWidth + 70, 180, 350)
-    NotifFrame.Size = UDim2.new(0, newWidth, 0, 55)
-    
     NotifFrame.Visible = true
-    NotifFrame.Position = UDim2.new(0.5, 0, 0, -70)
-    NotifFrame.BackgroundTransparency = 1
+    NotifFrame.Position = UDim2.new(0.5, 0, 0, -60)
+    NotifFrame.BackgroundTransparency = 0.8
     
-    -- Animação de entrada (slide + fade)
-    ts:Create(NotifFrame, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-        Position = UDim2.new(0.5, 0, 0, 15),
-        BackgroundTransparency = 0.03
+    ts:Create(NotifFrame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Position = UDim2.new(0.5, 0, 0, 10),
+        BackgroundTransparency = 0
     }):Play()
     
-    -- Esperar 2 segundos
-    task.delay(2, function()
+    task.delay(1.8, function()
         if token ~= NotifToken then return end
         
-        -- Animação de saída (slide + fade + escala)
-        local hide = ts:Create(NotifFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
-            Position = UDim2.new(0.5, 0, 0, -70),
-            BackgroundTransparency = 1
+        local hide = ts:Create(NotifFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+            Position = UDim2.new(0.5, 0, 0, -60),
+            BackgroundTransparency = 0.8
         })
         hide:Play()
         
@@ -1002,46 +979,46 @@ end
 
 local function CreateSectionLabel(parent, text)
     local container = Instance.new("Frame", parent)
-    container.Size = UDim2.new(0.9, 0, 0, 16)
-    container.BackgroundColor3 = Color3.fromRGB(35, 18, 50)
-    container.BackgroundTransparency = 0.03
-    CreateCorner(container, 5)
+    container.Size = UDim2.new(0.9, 0, 0, 14)
+    container.BackgroundColor3 = Color3.fromRGB(45, 25, 70)
+    container.BackgroundTransparency = 0
+    CreateCorner(container, 4)
     
     local grad = Instance.new("UIGradient", container)
     grad.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 20, 60)),
-        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(60, 25, 80)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(40, 20, 60))
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(60, 30, 90)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(90, 40, 120)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(60, 30, 90))
     })
     grad.Rotation = 90
     
     local stroke = Instance.new("UIStroke", container)
-    stroke.Color = Color3.fromRGB(100, 40, 140)
+    stroke.Color = Color3.fromRGB(150, 70, 200)
     stroke.Thickness = 1
-    stroke.Transparency = 0.4
+    stroke.Transparency = 0.3
     
     local indicator = Instance.new("Frame", container)
-    indicator.Size = UDim2.new(0, 3, 0, 12)
-    indicator.Position = UDim2.new(0, 4, 0.5, -6)
-    indicator.BackgroundColor3 = Color3.fromRGB(180, 60, 220)
+    indicator.Size = UDim2.new(0, 2, 0, 10)
+    indicator.Position = UDim2.new(0, 4, 0.5, -5)
+    indicator.BackgroundColor3 = Color3.fromRGB(200, 100, 240)
     indicator.BorderSizePixel = 0
     CreateCorner(indicator, 1)
     
     local label = Instance.new("TextLabel", container)
-    label.Size = UDim2.new(1, -12, 1, 0)
-    label.Position = UDim2.new(0, 9, 0, 0)
+    label.Size = UDim2.new(1, -10, 1, 0)
+    label.Position = UDim2.new(0, 8, 0, 0)
     label.BackgroundTransparency = 1
     label.Text = text
-    label.TextColor3 = Color3.fromRGB(220, 170, 240)
+    label.TextColor3 = Color3.fromRGB(220, 180, 240)
     label.TextSize = 8
-    label.Font = Enum.Font.GothamBlack
+    label.Font = Enum.Font.GothamBold
     label.TextXAlignment = Enum.TextXAlignment.Left
     
     return container
 end
 
 -- ============================================================
--- UI CREATION (TEMA ROXO MELHORADO)
+-- UI CREATION (ROXO VIBRANTE)
 -- ============================================================
 for _, v in pairs(game.CoreGui:GetChildren()) do if v.Name == "PRIDE_HUB" then v:Destroy() end end
 ScreenGui = Instance.new("ScreenGui", game.CoreGui); ScreenGui.Name = "PRIDE_HUB"; ScreenGui.IgnoreGuiInset = true
@@ -1062,39 +1039,43 @@ fovStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 local Main = Instance.new("Frame", ScreenGui)
 Main.Size = UDim2.new(0, 200, 0, 290)
 Main.Position = UDim2.new(0.5, -100, 0.5, -145)
-Main.BackgroundColor3 = Color3.fromRGB(20, 10, 30)
-Main.BackgroundTransparency = 0.02
+Main.BackgroundColor3 = Color3.fromRGB(25, 12, 40)
+Main.BackgroundTransparency = 0
 Main.Active = true
 Main.Draggable = true
 Main.ClipsDescendants = true
-CreateCorner(Main, 12)
+CreateCorner(Main, 10)
+
 local mainGrad = Instance.new("UIGradient", Main)
 mainGrad.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(30, 12, 50)),
-    ColorSequenceKeypoint.new(0.25, Color3.fromRGB(40, 18, 60)),
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(50, 22, 70)),
-    ColorSequenceKeypoint.new(0.75, Color3.fromRGB(40, 18, 60)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(30, 12, 50))
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(30, 10, 50)),
+    ColorSequenceKeypoint.new(0.25, Color3.fromRGB(40, 15, 65)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(50, 20, 75)),
+    ColorSequenceKeypoint.new(0.75, Color3.fromRGB(40, 15, 65)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(30, 10, 50))
 })
 mainGrad.Rotation = 45
+
 local mainStroke = Instance.new("UIStroke", Main)
-mainStroke.Color = Color3.fromRGB(160, 50, 200)
+mainStroke.Color = Color3.fromRGB(180, 80, 220)
 mainStroke.Thickness = 2
 mainStroke.Transparency = 0.2
 
 local hd = Instance.new("Frame", Main)
 hd.Size = UDim2.new(1, 0, 0, 36)
-hd.BackgroundColor3 = Color3.fromRGB(35, 15, 50)
-hd.BackgroundTransparency = 0.05
+hd.BackgroundColor3 = Color3.fromRGB(50, 20, 75)
+hd.BackgroundTransparency = 0
 hd.BorderSizePixel = 0
-CreateCorner(hd, 12)
+CreateCorner(hd, 10)
+
 local hdGrad = Instance.new("UIGradient", hd)
 hdGrad.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(60, 25, 90)),
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(100, 30, 120)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(60, 25, 90))
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(70, 30, 100)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(120, 40, 140)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(70, 30, 100))
 })
 hdGrad.Rotation = 90
+
 local hdLine = Instance.new("Frame", hd)
 hdLine.Size = UDim2.new(1, 0, 0, 1)
 hdLine.Position = UDim2.new(0, 0, 1, -1)
@@ -1106,9 +1087,9 @@ tt.Size = UDim2.new(1, -60, 0, 20)
 tt.Position = UDim2.new(0, 12, 0, 3)
 tt.BackgroundTransparency = 1
 tt.Text = "PRIDE HUB"
-tt.TextColor3 = Color3.new(1, 1, 1)
+tt.TextColor3 = Color3.fromRGB(255, 255, 255)
 tt.TextSize = 12
-tt.Font = Enum.Font.GothamBlack
+tt.Font = Enum.Font.GothamBold
 tt.TextXAlignment = Enum.TextXAlignment.Left
 
 local st = Instance.new("TextLabel", hd)
@@ -1116,7 +1097,7 @@ st.Size = UDim2.new(1, -60, 0, 10)
 st.Position = UDim2.new(0, 12, 0, 22)
 st.BackgroundTransparency = 1
 st.Text = "AIM • ESP • TP • ATALHO"
-st.TextColor3 = Color3.fromRGB(200, 150, 220)
+st.TextColor3 = Color3.fromRGB(220, 180, 240)
 st.TextSize = 7
 st.Font = Enum.Font.GothamMedium
 st.TextXAlignment = Enum.TextXAlignment.Left
@@ -1124,40 +1105,40 @@ st.TextXAlignment = Enum.TextXAlignment.Left
 local btnMin = Instance.new("TextButton", hd)
 btnMin.Size = UDim2.new(0, 20, 0, 20)
 btnMin.Position = UDim2.new(1, -44, 0.5, -10)
-btnMin.BackgroundColor3 = Color3.fromRGB(70, 35, 95)
+btnMin.BackgroundColor3 = Color3.fromRGB(80, 40, 110)
 btnMin.BackgroundTransparency = 0.1
 btnMin.Text = "−"
 btnMin.TextColor3 = Color3.new(1, 1, 1)
 btnMin.TextSize = 13
-btnMin.Font = Enum.Font.GothamBold
+btnMin.Font = Enum.Font.GothamMedium
 btnMin.AutoButtonColor = false
 CreateCorner(btnMin, 6)
-CreateStroke(btnMin, Color3.fromRGB(180, 60, 220), 1, 0.3)
+CreateStroke(btnMin, Color3.fromRGB(180, 80, 220), 1, 0.3)
 
 local CloseBtn = Instance.new("TextButton", hd)
 CloseBtn.Size = UDim2.new(0, 20, 0, 20)
 CloseBtn.Position = UDim2.new(1, -22, 0.5, -10)
-CloseBtn.BackgroundColor3 = Color3.fromRGB(70, 35, 95)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(80, 40, 110)
 CloseBtn.BackgroundTransparency = 0.1
 CloseBtn.Text = "×"
 CloseBtn.TextColor3 = Color3.new(1, 1, 1)
 CloseBtn.TextSize = 13
-CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.Font = Enum.Font.GothamMedium
 CloseBtn.AutoButtonColor = false
 CreateCorner(CloseBtn, 6)
-CreateStroke(CloseBtn, Color3.fromRGB(180, 60, 220), 1, 0.3)
+CreateStroke(CloseBtn, Color3.fromRGB(180, 80, 220), 1, 0.3)
 
 local Icon = Instance.new("ImageButton", ScreenGui)
 Icon.Size = UDim2.new(0, 38, 0, 38)
 Icon.Position = UDim2.new(0, 10, 0, 100)
 Icon.Image = "rbxassetid://73630975144333"
 Icon.ImageTransparency = 0.05
-Icon.BackgroundColor3 = Color3.fromRGB(60, 30, 90)
+Icon.BackgroundColor3 = Color3.fromRGB(80, 40, 110)
 Icon.BackgroundTransparency = 0.1
 Icon.Visible = false
 Icon.ZIndex = 10
 CreateCorner(Icon, 10)
-CreateStroke(Icon, Color3.fromRGB(180, 60, 220), 2, 0.3)
+CreateStroke(Icon, Color3.fromRGB(180, 80, 220), 2, 0.3)
 
 local minimizado = true
 
@@ -1241,66 +1222,66 @@ end)
 local barraAbas = Instance.new("Frame", Main)
 barraAbas.Size = UDim2.new(1, 0, 0, 26)
 barraAbas.Position = UDim2.new(0, 0, 0, 36)
-barraAbas.BackgroundColor3 = Color3.fromRGB(20, 10, 30)
-barraAbas.BackgroundTransparency = 0.2
+barraAbas.BackgroundColor3 = Color3.fromRGB(25, 12, 40)
+barraAbas.BackgroundTransparency = 0
 barraAbas.BorderSizePixel = 0
 
 local abaAIM = Instance.new("TextButton", barraAbas)
 abaAIM.Size = UDim2.new(0.24, 0, 0, 22)
 abaAIM.Position = UDim2.new(0.005, 0, 0, 2)
-abaAIM.BackgroundColor3 = Color3.fromRGB(80, 30, 120)
+abaAIM.BackgroundColor3 = Color3.fromRGB(90, 40, 130)
 abaAIM.BackgroundTransparency = 0.1
-abaAIM.Text = "🎯 AIM"
-abaAIM.TextColor3 = Color3.new(1, 1, 1)
+abaAIM.Text = "AIM"
+abaAIM.TextColor3 = Color3.fromRGB(255, 255, 255)
 abaAIM.TextSize = 8
-abaAIM.Font = Enum.Font.GothamBlack
+abaAIM.Font = Enum.Font.GothamBold
 abaAIM.AutoButtonColor = false
 CreateCorner(abaAIM, 6)
-CreateStroke(abaAIM, Color3.fromRGB(180, 60, 220), 1, 0.3)
+CreateStroke(abaAIM, Color3.fromRGB(200, 80, 240), 1, 0.3)
 
 local abaESP = Instance.new("TextButton", barraAbas)
 abaESP.Size = UDim2.new(0.24, 0, 0, 22)
 abaESP.Position = UDim2.new(0.255, 0, 0, 2)
-abaESP.BackgroundColor3 = Color3.fromRGB(40, 20, 60)
-abaESP.BackgroundTransparency = 0.15
-abaESP.Text = "👁️ ESP"
-abaESP.TextColor3 = Color3.fromRGB(180, 180, 190)
+abaESP.BackgroundColor3 = Color3.fromRGB(50, 25, 75)
+abaESP.BackgroundTransparency = 0.1
+abaESP.Text = "ESP"
+abaESP.TextColor3 = Color3.fromRGB(200, 190, 210)
 abaESP.TextSize = 8
-abaESP.Font = Enum.Font.GothamBlack
+abaESP.Font = Enum.Font.GothamBold
 abaESP.AutoButtonColor = false
 CreateCorner(abaESP, 6)
-CreateStroke(abaESP, Color3.fromRGB(100, 40, 150), 1, 0.5)
+CreateStroke(abaESP, Color3.fromRGB(130, 70, 180), 1, 0.4)
 
 local abaTP = Instance.new("TextButton", barraAbas)
 abaTP.Size = UDim2.new(0.24, 0, 0, 22)
 abaTP.Position = UDim2.new(0.505, 0, 0, 2)
-abaTP.BackgroundColor3 = Color3.fromRGB(40, 20, 60)
-abaTP.BackgroundTransparency = 0.15
-abaTP.Text = "🌀 TP"
-abaTP.TextColor3 = Color3.fromRGB(180, 180, 190)
+abaTP.BackgroundColor3 = Color3.fromRGB(50, 25, 75)
+abaTP.BackgroundTransparency = 0.1
+abaTP.Text = "TP"
+abaTP.TextColor3 = Color3.fromRGB(200, 190, 210)
 abaTP.TextSize = 8
-abaTP.Font = Enum.Font.GothamBlack
+abaTP.Font = Enum.Font.GothamBold
 abaTP.AutoButtonColor = false
 CreateCorner(abaTP, 6)
-CreateStroke(abaTP, Color3.fromRGB(100, 40, 150), 1, 0.5)
+CreateStroke(abaTP, Color3.fromRGB(130, 70, 180), 1, 0.4)
 
 local abaAtalho = Instance.new("TextButton", barraAbas)
 abaAtalho.Size = UDim2.new(0.24, 0, 0, 22)
 abaAtalho.Position = UDim2.new(0.755, 0, 0, 2)
-abaAtalho.BackgroundColor3 = Color3.fromRGB(40, 20, 60)
-abaAtalho.BackgroundTransparency = 0.15
-abaAtalho.Text = "⚡ ATALHO"
-abaAtalho.TextColor3 = Color3.fromRGB(180, 180, 190)
+abaAtalho.BackgroundColor3 = Color3.fromRGB(50, 25, 75)
+abaAtalho.BackgroundTransparency = 0.1
+abaAtalho.Text = "ATALHO"
+abaAtalho.TextColor3 = Color3.fromRGB(200, 190, 210)
 abaAtalho.TextSize = 7
-abaAtalho.Font = Enum.Font.GothamBlack
+abaAtalho.Font = Enum.Font.GothamBold
 abaAtalho.AutoButtonColor = false
 CreateCorner(abaAtalho, 6)
-CreateStroke(abaAtalho, Color3.fromRGB(100, 40, 150), 1, 0.5)
+CreateStroke(abaAtalho, Color3.fromRGB(130, 70, 180), 1, 0.4)
 
 local abaIndicator = Instance.new("Frame", barraAbas)
 abaIndicator.Size = UDim2.new(0, 18, 0, 2)
 abaIndicator.Position = UDim2.new(0.005, 0, 1, -1)
-abaIndicator.BackgroundColor3 = Color3.fromRGB(180, 60, 220)
+abaIndicator.BackgroundColor3 = Color3.fromRGB(200, 80, 240)
 abaIndicator.BorderSizePixel = 0
 CreateCorner(abaIndicator, 1)
 
@@ -1310,15 +1291,14 @@ local contentH = 228
 local telaAIM = Instance.new("ScrollingFrame", Main)
 telaAIM.Size = UDim2.new(1, 0, 0, contentH)
 telaAIM.Position = UDim2.new(0, 0, 0, contentY)
-telaAIM.BackgroundColor3 = Color3.fromRGB(20, 10, 30)
-telaAIM.BackgroundTransparency = 0.3
-telaAIM.ScrollBarThickness = 3
-telaAIM.ScrollBarImageColor3 = Color3.fromRGB(160, 50, 200)
+telaAIM.BackgroundColor3 = Color3.fromRGB(25, 12, 40)
+telaAIM.BackgroundTransparency = 0
+telaAIM.ScrollBarThickness = 2
+telaAIM.ScrollBarImageColor3 = Color3.fromRGB(180, 80, 220)
 telaAIM.BorderSizePixel = 0
 telaAIM.Visible = true
 telaAIM.CanvasSize = UDim2.new(0, 0, 0, 0)
 telaAIM.AutomaticCanvasSize = Enum.AutomaticSize.Y
-telaAIM.ElasticBehavior = Enum.ElasticBehavior.Always
 local layAIM = Instance.new("UIListLayout", telaAIM)
 layAIM.Padding = UDim.new(0, 4)
 layAIM.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -1332,15 +1312,14 @@ padAIM.PaddingRight = UDim.new(0, 5)
 local telaESP = Instance.new("ScrollingFrame", Main)
 telaESP.Size = UDim2.new(1, 0, 0, contentH)
 telaESP.Position = UDim2.new(0, 0, 0, contentY)
-telaESP.BackgroundColor3 = Color3.fromRGB(20, 10, 30)
-telaESP.BackgroundTransparency = 0.3
-telaESP.ScrollBarThickness = 3
-telaESP.ScrollBarImageColor3 = Color3.fromRGB(160, 50, 200)
+telaESP.BackgroundColor3 = Color3.fromRGB(25, 12, 40)
+telaESP.BackgroundTransparency = 0
+telaESP.ScrollBarThickness = 2
+telaESP.ScrollBarImageColor3 = Color3.fromRGB(180, 80, 220)
 telaESP.BorderSizePixel = 0
 telaESP.Visible = false
 telaESP.CanvasSize = UDim2.new(0, 0, 0, 0)
 telaESP.AutomaticCanvasSize = Enum.AutomaticSize.Y
-telaESP.ElasticBehavior = Enum.ElasticBehavior.Always
 local layESP = Instance.new("UIListLayout", telaESP)
 layESP.Padding = UDim.new(0, 4)
 layESP.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -1354,15 +1333,14 @@ padESP.PaddingRight = UDim.new(0, 5)
 local telaTP = Instance.new("ScrollingFrame", Main)
 telaTP.Size = UDim2.new(1, 0, 0, contentH)
 telaTP.Position = UDim2.new(0, 0, 0, contentY)
-telaTP.BackgroundColor3 = Color3.fromRGB(20, 10, 30)
-telaTP.BackgroundTransparency = 0.3
-telaTP.ScrollBarThickness = 3
-telaTP.ScrollBarImageColor3 = Color3.fromRGB(160, 50, 200)
+telaTP.BackgroundColor3 = Color3.fromRGB(25, 12, 40)
+telaTP.BackgroundTransparency = 0
+telaTP.ScrollBarThickness = 2
+telaTP.ScrollBarImageColor3 = Color3.fromRGB(180, 80, 220)
 telaTP.BorderSizePixel = 0
 telaTP.Visible = false
 telaTP.CanvasSize = UDim2.new(0, 0, 0, 0)
 telaTP.AutomaticCanvasSize = Enum.AutomaticSize.Y
-telaTP.ElasticBehavior = Enum.ElasticBehavior.Always
 local layTP = Instance.new("UIListLayout", telaTP)
 layTP.Padding = UDim.new(0, 8)
 layTP.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -1376,15 +1354,14 @@ padTP.PaddingRight = UDim.new(0, 8)
 local telaAtalho = Instance.new("ScrollingFrame", Main)
 telaAtalho.Size = UDim2.new(1, 0, 0, contentH)
 telaAtalho.Position = UDim2.new(0, 0, 0, contentY)
-telaAtalho.BackgroundColor3 = Color3.fromRGB(20, 10, 30)
-telaAtalho.BackgroundTransparency = 0.3
-telaAtalho.ScrollBarThickness = 3
-telaAtalho.ScrollBarImageColor3 = Color3.fromRGB(160, 50, 200)
+telaAtalho.BackgroundColor3 = Color3.fromRGB(25, 12, 40)
+telaAtalho.BackgroundTransparency = 0
+telaAtalho.ScrollBarThickness = 2
+telaAtalho.ScrollBarImageColor3 = Color3.fromRGB(180, 80, 220)
 telaAtalho.BorderSizePixel = 0
 telaAtalho.Visible = false
 telaAtalho.CanvasSize = UDim2.new(0, 0, 0, 0)
 telaAtalho.AutomaticCanvasSize = Enum.AutomaticSize.Y
-telaAtalho.ElasticBehavior = Enum.ElasticBehavior.Always
 local layAtalho = Instance.new("UIListLayout", telaAtalho)
 layAtalho.Padding = UDim.new(0, 8)
 layAtalho.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -1396,18 +1373,18 @@ padAtalho.PaddingLeft = UDim.new(0, 8)
 padAtalho.PaddingRight = UDim.new(0, 8)
 
 -- ============================================================
--- COMPONENTES UI (ROXO MELHORADO)
+-- COMPONENTES UI (ROXO VIBRANTE)
 -- ============================================================
 local selectedColorBtn = nil
 
 local function criarSeletorCores(parent, callback)
     local frame = Instance.new("Frame", parent)
     frame.Size = UDim2.new(0.9, 0, 0, 42)
-    frame.BackgroundColor3 = Color3.fromRGB(35, 18, 50)
-    frame.BackgroundTransparency = 0.03
+    frame.BackgroundColor3 = Color3.fromRGB(45, 25, 70)
+    frame.BackgroundTransparency = 0
     frame.LayoutOrder = 99
-    CreateCorner(frame, 8)
-    CreateStroke(frame, Color3.fromRGB(100, 40, 140), 1, 0.4)
+    CreateCorner(frame, 7)
+    CreateStroke(frame, Color3.fromRGB(130, 70, 180), 1, 0.3)
     local grid = Instance.new("UIGridLayout", frame)
     grid.CellSize = UDim2.new(0, 26, 0, 18)
     grid.CellPadding = UDim2.new(0, 3, 0, 3)
@@ -1420,7 +1397,7 @@ local function criarSeletorCores(parent, callback)
         bt.Text = ""
         bt.AutoButtonColor = false
         CreateCorner(bt, 4)
-        CreateStroke(bt, Color3.fromRGB(140, 60, 200), 1, 0.3)
+        CreateStroke(bt, Color3.fromRGB(180, 80, 220), 1, 0.3)
         bt.MouseButton1Click:Connect(function()
             if selectedColorBtn then
                 if selectedColorBtn:FindFirstChild("UIStroke2") then selectedColorBtn:FindFirstChild("UIStroke2"):Destroy() end
@@ -1440,28 +1417,20 @@ end
 local function AddToggleVertical(name, prop, parent)
     local btn = Instance.new("TextButton", parent)
     btn.Size = UDim2.new(0.9, 0, 0, 32)
-    btn.BackgroundColor3 = Color3.fromRGB(35, 18, 50)
-    btn.BackgroundTransparency = 0.03
+    btn.BackgroundColor3 = Color3.fromRGB(45, 25, 70)
+    btn.BackgroundTransparency = 0
     btn.Text = ""
     btn.AutoButtonColor = false
     btn.BorderSizePixel = 0
-    CreateCorner(btn, 8)
-    CreateStroke(btn, Color3.fromRGB(100, 40, 140), 1, 0.4)
-    
-    local grad = Instance.new("UIGradient", btn)
-    grad.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 20, 60)),
-        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(55, 25, 75)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(40, 20, 60))
-    })
-    grad.Rotation = 90
+    CreateCorner(btn, 7)
+    CreateStroke(btn, Color3.fromRGB(130, 70, 180), 1, 0.3)
     
     local label = Instance.new("TextLabel", btn)
     label.Size = UDim2.new(0.55, 0, 1, 0)
     label.Position = UDim2.new(0, 9, 0, 0)
     label.BackgroundTransparency = 1
     label.Text = name
-    label.TextColor3 = Color3.new(1, 1, 1)
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
     label.TextSize = 8
     label.Font = Enum.Font.GothamBold
     label.TextXAlignment = Enum.TextXAlignment.Left
@@ -1469,23 +1438,23 @@ local function AddToggleVertical(name, prop, parent)
     local toggleDot = Instance.new("Frame", btn)
     toggleDot.Size = UDim2.new(0, 30, 0, 16)
     toggleDot.Position = UDim2.new(1, -38, 0.5, -8)
-    toggleDot.BackgroundColor3 = Color3.fromRGB(50, 35, 65)
+    toggleDot.BackgroundColor3 = Color3.fromRGB(60, 35, 85)
     toggleDot.BorderSizePixel = 0
     CreateCorner(toggleDot, 8)
-    CreateStroke(toggleDot, Color3.fromRGB(120, 50, 160), 1, 0.4)
+    CreateStroke(toggleDot, Color3.fromRGB(150, 70, 200), 1, 0.3)
     
     local dot = Instance.new("Frame", toggleDot)
     dot.Size = UDim2.new(0, 12, 0, 12)
     dot.Position = UDim2.new(0, 2, 0.5, -6)
-    dot.BackgroundColor3 = Color3.fromRGB(130, 100, 150)
+    dot.BackgroundColor3 = Color3.fromRGB(160, 130, 180)
     dot.BorderSizePixel = 0
     CreateCorner(dot, 6)
     
     local function updateToggle(showNotif)
         local on = getgenv().Config[prop]
-        ts:Create(dot, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = UDim2.new(0, on and 16 or 2, 0.5, -6), BackgroundColor3 = on and Color3.fromRGB(200, 80, 240) or Color3.fromRGB(130, 100, 150)}):Play()
-        ts:Create(toggleDot, TweenInfo.new(0.15), {BackgroundColor3 = on and Color3.fromRGB(70, 35, 95) or Color3.fromRGB(50, 35, 65)}):Play()
-        ts:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = on and Color3.fromRGB(55, 25, 75) or Color3.fromRGB(35, 18, 50)}):Play()
+        ts:Create(dot, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = UDim2.new(0, on and 16 or 2, 0.5, -6), BackgroundColor3 = on and Color3.fromRGB(220, 100, 255) or Color3.fromRGB(160, 130, 180)}):Play()
+        ts:Create(toggleDot, TweenInfo.new(0.15), {BackgroundColor3 = on and Color3.fromRGB(80, 40, 110) or Color3.fromRGB(60, 35, 85)}):Play()
+        ts:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = on and Color3.fromRGB(65, 35, 95) or Color3.fromRGB(45, 25, 70)}):Play()
         if showNotif then
             if prop == "ButtonTP" then
                 ShowNotification(on and "ATALHO TP ATIVADO" or "ATALHO TP DESATIVADO", on)
@@ -1541,18 +1510,18 @@ local function AddSliderVertical(name, prop, parent, max, min, suffix)
     suffix = suffix or ""
     local frame = Instance.new("Frame", parent)
     frame.Size = UDim2.new(0.9, 0, 0, 35)
-    frame.BackgroundColor3 = Color3.fromRGB(30, 15, 45)
-    frame.BackgroundTransparency = 0.03
+    frame.BackgroundColor3 = Color3.fromRGB(40, 22, 65)
+    frame.BackgroundTransparency = 0
     frame.BorderSizePixel = 0
-    CreateCorner(frame, 8)
-    CreateStroke(frame, Color3.fromRGB(100, 40, 140), 1, 0.4)
+    CreateCorner(frame, 7)
+    CreateStroke(frame, Color3.fromRGB(130, 70, 180), 1, 0.3)
     
     local label = Instance.new("TextLabel", frame)
     label.Size = UDim2.new(0.5, 0, 0, 15)
     label.Position = UDim2.new(0, 7, 0, 2)
     label.BackgroundTransparency = 1
     label.Text = name
-    label.TextColor3 = Color3.new(1, 1, 1)
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
     label.TextSize = 7
     label.Font = Enum.Font.GothamBold
     label.TextXAlignment = Enum.TextXAlignment.Left
@@ -1562,30 +1531,30 @@ local function AddSliderVertical(name, prop, parent, max, min, suffix)
     valueLabel.Position = UDim2.new(0.6, 0, 0, 2)
     valueLabel.BackgroundTransparency = 1
     valueLabel.Text = getgenv().Config[prop] .. suffix
-    valueLabel.TextColor3 = Color3.fromRGB(220, 130, 240)
+    valueLabel.TextColor3 = Color3.fromRGB(220, 140, 250)
     valueLabel.TextSize = 8
-    valueLabel.Font = Enum.Font.GothamBlack
+    valueLabel.Font = Enum.Font.GothamBold
     valueLabel.TextXAlignment = Enum.TextXAlignment.Right
     
     local barBg = Instance.new("Frame", frame)
-    barBg.Size = UDim2.new(0.9, 0, 0, 7)
+    barBg.Size = UDim2.new(0.9, 0, 0, 6)
     barBg.Position = UDim2.new(0.05, 0, 0, 20)
-    barBg.BackgroundColor3 = Color3.fromRGB(50, 35, 65)
+    barBg.BackgroundColor3 = Color3.fromRGB(60, 35, 85)
     barBg.BorderSizePixel = 0
     CreateCorner(barBg, 3)
     
     local barFill = Instance.new("Frame", barBg)
     local percent = (getgenv().Config[prop] - min) / (max - min)
     barFill.Size = UDim2.new(percent, 0, 1, 0)
-    barFill.BackgroundColor3 = Color3.fromRGB(180, 60, 220)
+    barFill.BackgroundColor3 = Color3.fromRGB(200, 80, 240)
     barFill.BorderSizePixel = 0
     CreateCorner(barFill, 3)
     
     local fillGrad = Instance.new("UIGradient", barFill)
     fillGrad.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(140, 40, 190)),
-        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(200, 80, 240)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(140, 40, 190))
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(160, 40, 200)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(230, 100, 255)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(160, 40, 200))
     })
     fillGrad.Rotation = 90
     
@@ -1688,15 +1657,15 @@ AddSliderVertical("RAIO FOV", "Radius", telaAIM, 600)
 CreateSectionLabel(telaAIM, "ALVO")
 local PartBtn = Instance.new("TextButton", telaAIM)
 PartBtn.Size = UDim2.new(0.9, 0, 0, 28)
-PartBtn.BackgroundColor3 = Color3.fromRGB(35, 18, 50)
-PartBtn.BackgroundTransparency = 0.03
+PartBtn.BackgroundColor3 = Color3.fromRGB(45, 25, 70)
+PartBtn.BackgroundTransparency = 0
 PartBtn.Text = "ALVO: CABEÇA"
-PartBtn.TextColor3 = Color3.new(1, 1, 1)
+PartBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 PartBtn.TextSize = 8
 PartBtn.Font = Enum.Font.GothamBold
 PartBtn.AutoButtonColor = false
 CreateCorner(PartBtn, 7)
-CreateStroke(PartBtn, Color3.fromRGB(160, 50, 200), 1, 0.3)
+CreateStroke(PartBtn, Color3.fromRGB(180, 80, 220), 1, 0.3)
 PartBtn.MouseButton1Click:Connect(function()
     getgenv().Config.TargetPart = (getgenv().Config.TargetPart == "Head" and "HumanoidRootPart" or "Head")
     PartBtn.Text = "ALVO: " .. (getgenv().Config.TargetPart == "Head" and "CABEÇA" or "TRONCO")
@@ -1715,20 +1684,20 @@ AddToggleVertical("SAIR AIM", "SairAimEnabled", telaAIM)
 
 sairAimInput = Instance.new("TextBox", telaAIM)
 sairAimInput.Size = UDim2.new(0.9, 0, 0, 28)
-sairAimInput.BackgroundColor3 = Color3.fromRGB(40, 20, 60)
-sairAimInput.BackgroundTransparency = 0.03
-sairAimInput.TextColor3 = Color3.fromRGB(230, 210, 240)
-sairAimInput.PlaceholderColor3 = Color3.fromRGB(160, 130, 180)
+sairAimInput.BackgroundColor3 = Color3.fromRGB(50, 28, 75)
+sairAimInput.BackgroundTransparency = 0
+sairAimInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+sairAimInput.PlaceholderColor3 = Color3.fromRGB(180, 150, 200)
 sairAimInput.PlaceholderText = "QUANTAS TENTATIVAS"
 sairAimInput.Text = "3"
 sairAimInput.ClearTextOnFocus = false
 sairAimInput.TextSize = 9
-sairAimInput.Font = Enum.Font.GothamMedium
+sairAimInput.Font = Enum.Font.GothamBold
 sairAimInput.TextXAlignment = Enum.TextXAlignment.Center
 sairAimInput.Visible = false
 sairAimInput.LayoutOrder = 99
 CreateCorner(sairAimInput, 7)
-CreateStroke(sairAimInput, Color3.fromRGB(160, 50, 200), 1, 0.3)
+CreateStroke(sairAimInput, Color3.fromRGB(180, 80, 220), 1, 0.3)
 
 sairAimInput.FocusLost:Connect(function()
     local numero = tonumber(sairAimInput.Text)
@@ -1747,7 +1716,7 @@ sairAimContadorLabel = Instance.new("TextLabel", telaAIM)
 sairAimContadorLabel.Size = UDim2.new(0.9, 0, 0, 16)
 sairAimContadorLabel.BackgroundTransparency = 1
 sairAimContadorLabel.Text = "SAÍDAS: 0/3"
-sairAimContadorLabel.TextColor3 = Color3.fromRGB(220, 130, 240)
+sairAimContadorLabel.TextColor3 = Color3.fromRGB(220, 140, 250)
 sairAimContadorLabel.TextSize = 9
 sairAimContadorLabel.Font = Enum.Font.GothamBold
 sairAimContadorLabel.TextXAlignment = Enum.TextXAlignment.Center
@@ -1799,9 +1768,9 @@ tpCoordLabel = Instance.new("TextLabel", telaTP)
 tpCoordLabel.Size = UDim2.new(0.9, 0, 0, 18)
 tpCoordLabel.BackgroundTransparency = 1
 tpCoordLabel.Text = "Nenhuma posição"
-tpCoordLabel.TextColor3 = Color3.fromRGB(220, 130, 240)
+tpCoordLabel.TextColor3 = Color3.fromRGB(220, 140, 250)
 tpCoordLabel.TextSize = 9
-tpCoordLabel.Font = Enum.Font.GothamBold
+tpCoordLabel.Font = Enum.Font.GothamMedium
 tpCoordLabel.TextXAlignment = Enum.TextXAlignment.Center
 tpCoordLabel.LayoutOrder = 2
 
@@ -1809,21 +1778,22 @@ UpdateTPUI()
 
 local marcarBtn = Instance.new("TextButton", telaTP)
 marcarBtn.Size = UDim2.new(0.9, 0, 0, 34)
-marcarBtn.BackgroundColor3 = Color3.fromRGB(35, 18, 50)
-marcarBtn.BackgroundTransparency = 0.03
+marcarBtn.BackgroundColor3 = Color3.fromRGB(50, 28, 75)
+marcarBtn.BackgroundTransparency = 0
 marcarBtn.Text = "📍 MARCAR"
-marcarBtn.TextColor3 = Color3.new(1, 1, 1)
+marcarBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 marcarBtn.TextSize = 11
 marcarBtn.Font = Enum.Font.GothamBold
 marcarBtn.AutoButtonColor = false
 marcarBtn.LayoutOrder = 3
-CreateCorner(marcarBtn, 8)
-CreateStroke(marcarBtn, Color3.fromRGB(160, 50, 200), 1.5, 0.3)
+CreateCorner(marcarBtn, 7)
+CreateStroke(marcarBtn, Color3.fromRGB(180, 80, 220), 1.5, 0.3)
+
 local marcarGrad = Instance.new("UIGradient", marcarBtn)
 marcarGrad.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(90, 35, 130)),
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(140, 50, 180)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(90, 35, 130))
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(100, 40, 140)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(160, 60, 200)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 40, 140))
 })
 marcarGrad.Rotation = 90
 
@@ -1836,27 +1806,27 @@ marcarBtn.MouseButton1Click:Connect(function()
     local dedoBtn = Instance.new("TextButton", tpOptionFrame)
     dedoBtn.Size = UDim2.new(0.48, 0, 0, 30)
     dedoBtn.Position = UDim2.new(0, 0, 0, 2)
-    dedoBtn.BackgroundColor3 = Color3.fromRGB(45, 22, 65)
-    dedoBtn.BackgroundTransparency = 0.03
+    dedoBtn.BackgroundColor3 = Color3.fromRGB(55, 30, 80)
+    dedoBtn.BackgroundTransparency = 0
     dedoBtn.Text = "👆 DEDO"
-    dedoBtn.TextColor3 = Color3.new(1, 1, 1)
+    dedoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     dedoBtn.TextSize = 10
     dedoBtn.Font = Enum.Font.GothamBold
     dedoBtn.AutoButtonColor = false
     CreateCorner(dedoBtn, 7)
-    CreateStroke(dedoBtn, Color3.fromRGB(160, 50, 200), 1, 0.3)
+    CreateStroke(dedoBtn, Color3.fromRGB(180, 80, 220), 1, 0.3)
     local agoraBtn = Instance.new("TextButton", tpOptionFrame)
     agoraBtn.Size = UDim2.new(0.48, 0, 0, 30)
     agoraBtn.Position = UDim2.new(0.52, 0, 0, 2)
-    agoraBtn.BackgroundColor3 = Color3.fromRGB(45, 22, 65)
-    agoraBtn.BackgroundTransparency = 0.03
+    agoraBtn.BackgroundColor3 = Color3.fromRGB(55, 30, 80)
+    agoraBtn.BackgroundTransparency = 0
     agoraBtn.Text = "⚡ AGORA"
-    agoraBtn.TextColor3 = Color3.new(1, 1, 1)
+    agoraBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     agoraBtn.TextSize = 10
     agoraBtn.Font = Enum.Font.GothamBold
     agoraBtn.AutoButtonColor = false
     CreateCorner(agoraBtn, 7)
-    CreateStroke(agoraBtn, Color3.fromRGB(160, 50, 200), 1, 0.3)
+    CreateStroke(agoraBtn, Color3.fromRGB(180, 80, 220), 1, 0.3)
     dedoBtn.MouseButton1Click:Connect(function()
         tpOptionFrame:Destroy()
         tpOptionFrame = nil
@@ -1882,36 +1852,37 @@ tpButtonFrame.LayoutOrder = 5
 local tpBtn = Instance.new("TextButton", tpButtonFrame)
 tpBtn.Size = UDim2.new(0.78, 0, 0, 34)
 tpBtn.Position = UDim2.new(0, 0, 0, 0)
-tpBtn.BackgroundColor3 = Color3.fromRGB(35, 18, 50)
-tpBtn.BackgroundTransparency = 0.03
+tpBtn.BackgroundColor3 = Color3.fromRGB(50, 28, 75)
+tpBtn.BackgroundTransparency = 0
 tpBtn.Text = "🌀 TELEPORTAR"
-tpBtn.TextColor3 = Color3.new(1, 1, 1)
+tpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 tpBtn.TextSize = 11
 tpBtn.Font = Enum.Font.GothamBold
 tpBtn.AutoButtonColor = false
-CreateCorner(tpBtn, 8)
-CreateStroke(tpBtn, Color3.fromRGB(160, 50, 200), 1.5, 0.3)
+CreateCorner(tpBtn, 7)
+CreateStroke(tpBtn, Color3.fromRGB(180, 80, 220), 1.5, 0.3)
+
 local tpBtnGrad = Instance.new("UIGradient", tpBtn)
 tpBtnGrad.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(90, 35, 130)),
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(140, 50, 180)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(90, 35, 130))
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(100, 40, 140)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(160, 60, 200)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 40, 140))
 })
 tpBtnGrad.Rotation = 90
 
 backTPBtn = Instance.new("TextButton", tpButtonFrame)
 backTPBtn.Size = UDim2.new(0, 38, 0, 34)
 backTPBtn.Position = UDim2.new(0.82, 4, 0, 0)
-backTPBtn.BackgroundColor3 = Color3.fromRGB(35, 18, 50)
-backTPBtn.BackgroundTransparency = 0.03
+backTPBtn.BackgroundColor3 = Color3.fromRGB(50, 28, 75)
+backTPBtn.BackgroundTransparency = 0
 backTPBtn.Text = "⬅️"
-backTPBtn.TextColor3 = Color3.new(1, 1, 1)
+backTPBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 backTPBtn.TextSize = 14
 backTPBtn.Font = Enum.Font.GothamBold
 backTPBtn.AutoButtonColor = false
 backTPBtn.Visible = false
-CreateCorner(backTPBtn, 8)
-CreateStroke(backTPBtn, Color3.fromRGB(160, 50, 200), 1.5, 0.3)
+CreateCorner(backTPBtn, 7)
+CreateStroke(backTPBtn, Color3.fromRGB(180, 80, 220), 1.5, 0.3)
 
 tpBtn.MouseButton1Click:Connect(function() TeleportToMarkedPosition() end)
 backTPBtn.MouseButton1Click:Connect(function()
@@ -1923,16 +1894,16 @@ end)
 -- Botão FORÇAR TP
 local btnForcar = Instance.new("TextButton", telaTP)
 btnForcar.Size = UDim2.new(0.9, 0, 0, 28)
-btnForcar.BackgroundColor3 = Color3.fromRGB(45, 22, 65)
-btnForcar.BackgroundTransparency = 0.03
+btnForcar.BackgroundColor3 = Color3.fromRGB(55, 30, 80)
+btnForcar.BackgroundTransparency = 0
 btnForcar.Text = "⚡ FORÇAR TP (FALLBACK)"
-btnForcar.TextColor3 = Color3.fromRGB(255, 200, 100)
+btnForcar.TextColor3 = Color3.fromRGB(255, 210, 130)
 btnForcar.TextSize = 9
 btnForcar.Font = Enum.Font.GothamBold
 btnForcar.AutoButtonColor = false
 btnForcar.LayoutOrder = 6
 CreateCorner(btnForcar, 7)
-CreateStroke(btnForcar, Color3.fromRGB(255, 200, 100), 1, 0.3)
+CreateStroke(btnForcar, Color3.fromRGB(255, 210, 130), 1, 0.3)
 btnForcar.MouseButton1Click:Connect(function()
     if not markedPosition then ShowNotification("NENHUM LOCAL MARCADO", false); return end
     ShowNotification("🔄 FORÇANDO TP...", true)
@@ -1958,18 +1929,18 @@ AddToggleVertical("TP INTERAÇÃO", "TPInteracao", telaAtalho)
 
 local tpDelayContainer = Instance.new("Frame", telaAtalho)
 tpDelayContainer.Size = UDim2.new(0.9, 0, 0, 32)
-tpDelayContainer.BackgroundColor3 = Color3.fromRGB(30, 15, 45)
-tpDelayContainer.BackgroundTransparency = 0.03
+tpDelayContainer.BackgroundColor3 = Color3.fromRGB(40, 22, 65)
+tpDelayContainer.BackgroundTransparency = 0
 tpDelayContainer.BorderSizePixel = 0
 CreateCorner(tpDelayContainer, 7)
-CreateStroke(tpDelayContainer, Color3.fromRGB(100, 40, 140), 1, 0.4)
+CreateStroke(tpDelayContainer, Color3.fromRGB(130, 70, 180), 1, 0.3)
 
 local tpDelayLabel = Instance.new("TextLabel", tpDelayContainer)
 tpDelayLabel.Size = UDim2.new(0.4, 0, 1, 0)
 tpDelayLabel.Position = UDim2.new(0, 9, 0, 0)
 tpDelayLabel.BackgroundTransparency = 1
 tpDelayLabel.Text = "DELAY:"
-tpDelayLabel.TextColor3 = Color3.new(1, 1, 1)
+tpDelayLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 tpDelayLabel.TextSize = 8
 tpDelayLabel.Font = Enum.Font.GothamBold
 tpDelayLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -1977,18 +1948,18 @@ tpDelayLabel.TextXAlignment = Enum.TextXAlignment.Left
 local tpDelayBox = Instance.new("TextBox", tpDelayContainer)
 tpDelayBox.Size = UDim2.new(0, 80, 0, 24)
 tpDelayBox.Position = UDim2.new(0.5, 0, 0.5, -12)
-tpDelayBox.BackgroundColor3 = Color3.fromRGB(40, 20, 60)
-tpDelayBox.BackgroundTransparency = 0.03
+tpDelayBox.BackgroundColor3 = Color3.fromRGB(50, 28, 75)
+tpDelayBox.BackgroundTransparency = 0
 tpDelayBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-tpDelayBox.PlaceholderColor3 = Color3.fromRGB(160, 130, 180)
+tpDelayBox.PlaceholderColor3 = Color3.fromRGB(180, 150, 200)
 tpDelayBox.PlaceholderText = "0.50"
 tpDelayBox.Text = tostring(getgenv().Config.TPInteracaoDelay)
 tpDelayBox.ClearTextOnFocus = false
 tpDelayBox.TextSize = 11
-tpDelayBox.Font = Enum.Font.GothamMedium
+tpDelayBox.Font = Enum.Font.GothamBold
 tpDelayBox.TextXAlignment = Enum.TextXAlignment.Center
 CreateCorner(tpDelayBox, 6)
-CreateStroke(tpDelayBox, Color3.fromRGB(160, 50, 200), 1, 0.3)
+CreateStroke(tpDelayBox, Color3.fromRGB(180, 80, 220), 1, 0.3)
 
 tpDelayBox.FocusLost:Connect(function()
     local value = tonumber(tpDelayBox.Text)
@@ -2003,40 +1974,41 @@ AddToggleVertical("Button FREECAM", "ButtonFreecam", telaAtalho)
 
 shortcutConfigButton = Instance.new("TextButton", telaAtalho)
 shortcutConfigButton.Size = UDim2.new(0.5, 0, 0, 36)
-shortcutConfigButton.BackgroundColor3 = Color3.fromRGB(35, 18, 50)
-shortcutConfigButton.BackgroundTransparency = 0.03
+shortcutConfigButton.BackgroundColor3 = Color3.fromRGB(50, 28, 75)
+shortcutConfigButton.BackgroundTransparency = 0
 shortcutConfigButton.Text = "⚙️"
-shortcutConfigButton.TextColor3 = Color3.new(1, 1, 1)
+shortcutConfigButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 shortcutConfigButton.TextSize = 16
 shortcutConfigButton.Font = Enum.Font.GothamBold
 shortcutConfigButton.AutoButtonColor = false
 shortcutConfigButton.LayoutOrder = 10
-CreateCorner(shortcutConfigButton, 8)
-CreateStroke(shortcutConfigButton, Color3.fromRGB(160, 50, 200), 1.5, 0.3)
+CreateCorner(shortcutConfigButton, 7)
+CreateStroke(shortcutConfigButton, Color3.fromRGB(180, 80, 220), 1.5, 0.3)
 shortcutConfigButton.MouseButton1Click:Connect(function() EnterShortcutEditMode() end)
 
 -- ============================================================
--- BOTÕES FLUTUANTES
+-- BOTÕES FLUTUANTES (COM ÍCONES)
 -- ============================================================
 shortcutTPButton = Instance.new("TextButton", ScreenGui)
 shortcutTPButton.Size = UDim2.new(0, 50, 0, 50)
 shortcutTPButton.Position = ShortcutPositions.TP
 shortcutTPButton.Text = "🚪"
 shortcutTPButton.TextSize = 22
-shortcutTPButton.BackgroundColor3 = Color3.fromRGB(35, 18, 50)
-shortcutTPButton.BackgroundTransparency = 0.03
+shortcutTPButton.BackgroundColor3 = Color3.fromRGB(50, 28, 75)
+shortcutTPButton.BackgroundTransparency = 0
 shortcutTPButton.TextColor3 = Color3.new(1, 1, 1)
-shortcutTPButton.Font = Enum.Font.GothamBlack
+shortcutTPButton.Font = Enum.Font.GothamBold
 shortcutTPButton.AutoButtonColor = false
 shortcutTPButton.Visible = false
 shortcutTPButton.ZIndex = 500
 CreateCorner(shortcutTPButton, 25)
-CreateStroke(shortcutTPButton, Color3.fromRGB(180, 60, 220), 2, 0.3)
+CreateStroke(shortcutTPButton, Color3.fromRGB(200, 80, 240), 2, 0.3)
+
 local tpGrad = Instance.new("UIGradient", shortcutTPButton)
 tpGrad.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(90, 35, 130)),
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(160, 50, 200)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(90, 35, 130))
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(100, 40, 140)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(180, 60, 220)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 40, 140))
 })
 tpGrad.Rotation = 45
 
@@ -2045,20 +2017,21 @@ shortcutBackButton.Size = UDim2.new(0, 50, 0, 50)
 shortcutBackButton.Position = ShortcutPositions.BACK
 shortcutBackButton.Text = "↩️"
 shortcutBackButton.TextSize = 22
-shortcutBackButton.BackgroundColor3 = Color3.fromRGB(35, 18, 50)
-shortcutBackButton.BackgroundTransparency = 0.03
+shortcutBackButton.BackgroundColor3 = Color3.fromRGB(50, 28, 75)
+shortcutBackButton.BackgroundTransparency = 0
 shortcutBackButton.TextColor3 = Color3.new(1, 1, 1)
-shortcutBackButton.Font = Enum.Font.GothamBlack
+shortcutBackButton.Font = Enum.Font.GothamBold
 shortcutBackButton.AutoButtonColor = false
 shortcutBackButton.Visible = false
 shortcutBackButton.ZIndex = 500
 CreateCorner(shortcutBackButton, 25)
-CreateStroke(shortcutBackButton, Color3.fromRGB(180, 60, 220), 2, 0.3)
+CreateStroke(shortcutBackButton, Color3.fromRGB(200, 80, 240), 2, 0.3)
+
 local backGrad = Instance.new("UIGradient", shortcutBackButton)
 backGrad.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(90, 35, 130)),
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(160, 50, 200)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(90, 35, 130))
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(100, 40, 140)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(180, 60, 220)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 40, 140))
 })
 backGrad.Rotation = 45
 
@@ -2072,28 +2045,29 @@ shortcutFreecamGroup.ZIndex = 500
 shortcutFreecamButton = Instance.new("TextButton", shortcutFreecamGroup)
 shortcutFreecamButton.Size = UDim2.new(0, 70, 0, 50)
 shortcutFreecamButton.Position = UDim2.new(0, 0, 0, 0)
-shortcutFreecamButton.Text = "👁️‍🗨️"
+shortcutFreecamButton.Text = "👁️"
 shortcutFreecamButton.TextSize = 22
-shortcutFreecamButton.BackgroundColor3 = Color3.fromRGB(35, 18, 50)
-shortcutFreecamButton.BackgroundTransparency = 0.03
+shortcutFreecamButton.BackgroundColor3 = Color3.fromRGB(50, 28, 75)
+shortcutFreecamButton.BackgroundTransparency = 0
 shortcutFreecamButton.TextColor3 = Color3.new(1, 1, 1)
-shortcutFreecamButton.Font = Enum.Font.GothamBlack
+shortcutFreecamButton.Font = Enum.Font.GothamBold
 shortcutFreecamButton.AutoButtonColor = false
 CreateCorner(shortcutFreecamButton, 25)
-CreateStroke(shortcutFreecamButton, Color3.fromRGB(180, 60, 220), 2, 0.3)
+CreateStroke(shortcutFreecamButton, Color3.fromRGB(200, 80, 240), 2, 0.3)
+
 local freeGrad = Instance.new("UIGradient", shortcutFreecamButton)
 freeGrad.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(90, 35, 130)),
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(160, 50, 200)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(90, 35, 130))
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(100, 40, 140)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(180, 60, 220)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 40, 140))
 })
 freeGrad.Rotation = 45
 
 freecamMinusButton = Instance.new("TextButton", shortcutFreecamGroup)
 freecamMinusButton.Size = UDim2.new(0, 30, 0, 50)
 freecamMinusButton.Position = UDim2.new(0, 75, 0, 0)
-freecamMinusButton.BackgroundColor3 = Color3.fromRGB(35, 18, 50)
-freecamMinusButton.BackgroundTransparency = 0.03
+freecamMinusButton.BackgroundColor3 = Color3.fromRGB(50, 28, 75)
+freecamMinusButton.BackgroundTransparency = 0
 freecamMinusButton.Text = "-"
 freecamMinusButton.TextColor3 = Color3.new(1, 1, 1)
 freecamMinusButton.TextSize = 16
@@ -2101,14 +2075,14 @@ freecamMinusButton.Font = Enum.Font.GothamBold
 freecamMinusButton.AutoButtonColor = false
 freecamMinusButton.Visible = false
 CreateCorner(freecamMinusButton, 25)
-CreateStroke(freecamMinusButton, Color3.fromRGB(180, 60, 220), 1, 0.3)
+CreateStroke(freecamMinusButton, Color3.fromRGB(200, 80, 240), 1, 0.3)
 
 freecamSpeedLabel = Instance.new("TextLabel", shortcutFreecamGroup)
 freecamSpeedLabel.Size = UDim2.new(0, 40, 0, 50)
 freecamSpeedLabel.Position = UDim2.new(0, 105, 0, 0)
 freecamSpeedLabel.BackgroundTransparency = 1
 freecamSpeedLabel.Text = "1.0x"
-freecamSpeedLabel.TextColor3 = Color3.new(1, 1, 1)
+freecamSpeedLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 freecamSpeedLabel.TextSize = 10
 freecamSpeedLabel.Font = Enum.Font.GothamBold
 freecamSpeedLabel.TextXAlignment = Enum.TextXAlignment.Center
@@ -2117,8 +2091,8 @@ freecamSpeedLabel.Visible = false
 freecamPlusButton = Instance.new("TextButton", shortcutFreecamGroup)
 freecamPlusButton.Size = UDim2.new(0, 30, 0, 50)
 freecamPlusButton.Position = UDim2.new(0, 140, 0, 0)
-freecamPlusButton.BackgroundColor3 = Color3.fromRGB(35, 18, 50)
-freecamPlusButton.BackgroundTransparency = 0.03
+freecamPlusButton.BackgroundColor3 = Color3.fromRGB(50, 28, 75)
+freecamPlusButton.BackgroundTransparency = 0
 freecamPlusButton.Text = "+"
 freecamPlusButton.TextColor3 = Color3.new(1, 1, 1)
 freecamPlusButton.TextSize = 16
@@ -2126,43 +2100,43 @@ freecamPlusButton.Font = Enum.Font.GothamBold
 freecamPlusButton.AutoButtonColor = false
 freecamPlusButton.Visible = false
 CreateCorner(freecamPlusButton, 25)
-CreateStroke(freecamPlusButton, Color3.fromRGB(180, 60, 220), 1, 0.3)
+CreateStroke(freecamPlusButton, Color3.fromRGB(200, 80, 240), 1, 0.3)
 
 shortcutEditBar = Instance.new("Frame", ScreenGui)
 shortcutEditBar.Size = UDim2.new(0, 200, 0, 40)
 shortcutEditBar.Position = UDim2.new(0.5, -100, 0.02, 0)
-shortcutEditBar.BackgroundColor3 = Color3.fromRGB(35, 18, 50)
+shortcutEditBar.BackgroundColor3 = Color3.fromRGB(45, 25, 70)
 shortcutEditBar.BorderSizePixel = 0
 shortcutEditBar.Visible = false
 shortcutEditBar.ZIndex = 600
 CreateCorner(shortcutEditBar, 10)
-CreateStroke(shortcutEditBar, Color3.fromRGB(160, 50, 200), 1.5, 0.3)
+CreateStroke(shortcutEditBar, Color3.fromRGB(180, 80, 220), 1.5, 0.3)
 
 local cancelEditBtn = Instance.new("TextButton", shortcutEditBar)
 cancelEditBtn.Size = UDim2.new(0.45, 0, 0, 30)
 cancelEditBtn.Position = UDim2.new(0.03, 0, 0.5, -15)
-cancelEditBtn.BackgroundColor3 = Color3.fromRGB(70, 35, 95)
+cancelEditBtn.BackgroundColor3 = Color3.fromRGB(80, 40, 110)
 cancelEditBtn.Text = "Cancelar"
-cancelEditBtn.TextColor3 = Color3.new(1, 1, 1)
+cancelEditBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 cancelEditBtn.TextSize = 10
 cancelEditBtn.Font = Enum.Font.GothamBold
 cancelEditBtn.AutoButtonColor = false
 cancelEditBtn.ZIndex = 601
 CreateCorner(cancelEditBtn, 7)
-CreateStroke(cancelEditBtn, Color3.fromRGB(180, 60, 220), 1, 0.3)
+CreateStroke(cancelEditBtn, Color3.fromRGB(180, 80, 220), 1, 0.3)
 
 local saveEditBtn = Instance.new("TextButton", shortcutEditBar)
 saveEditBtn.Size = UDim2.new(0.45, 0, 0, 30)
 saveEditBtn.Position = UDim2.new(0.52, 0, 0.5, -15)
-saveEditBtn.BackgroundColor3 = Color3.fromRGB(70, 35, 95)
+saveEditBtn.BackgroundColor3 = Color3.fromRGB(80, 40, 110)
 saveEditBtn.Text = "Salvar"
-saveEditBtn.TextColor3 = Color3.new(1, 1, 1)
+saveEditBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 saveEditBtn.TextSize = 10
 saveEditBtn.Font = Enum.Font.GothamBold
 saveEditBtn.AutoButtonColor = false
 saveEditBtn.ZIndex = 601
 CreateCorner(saveEditBtn, 7)
-CreateStroke(saveEditBtn, Color3.fromRGB(180, 60, 220), 1, 0.3)
+CreateStroke(saveEditBtn, Color3.fromRGB(180, 80, 220), 1, 0.3)
 
 cancelEditBtn.MouseButton1Click:Connect(function() CancelShortcutEdit() end)
 saveEditBtn.MouseButton1Click:Connect(function() SaveShortcutEdit() end)
@@ -2211,28 +2185,28 @@ local function selecionarAba(aba)
         if tpOptionFrame then tpOptionFrame:Destroy(); tpOptionFrame = nil end
     end
     if aba == "aim" then
-        ts:Create(abaAIM, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(80, 30, 120), BackgroundTransparency = 0.1, TextColor3 = Color3.new(1, 1, 1)}):Play()
-        ts:Create(abaESP, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(40, 20, 60), BackgroundTransparency = 0.15, TextColor3 = Color3.fromRGB(180, 180, 190)}):Play()
-        ts:Create(abaTP, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(40, 20, 60), BackgroundTransparency = 0.15, TextColor3 = Color3.fromRGB(180, 180, 190)}):Play()
-        ts:Create(abaAtalho, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(40, 20, 60), BackgroundTransparency = 0.15, TextColor3 = Color3.fromRGB(180, 180, 190)}):Play()
+        ts:Create(abaAIM, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(90, 40, 130), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
+        ts:Create(abaESP, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 25, 75), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(200, 190, 210)}):Play()
+        ts:Create(abaTP, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 25, 75), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(200, 190, 210)}):Play()
+        ts:Create(abaAtalho, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 25, 75), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(200, 190, 210)}):Play()
         ts:Create(abaIndicator, TweenInfo.new(0.15), {Position = UDim2.new(0.005, 0, 1, -1)}):Play()
     elseif aba == "esp" then
-        ts:Create(abaESP, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(80, 30, 120), BackgroundTransparency = 0.1, TextColor3 = Color3.new(1, 1, 1)}):Play()
-        ts:Create(abaAIM, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(40, 20, 60), BackgroundTransparency = 0.15, TextColor3 = Color3.fromRGB(180, 180, 190)}):Play()
-        ts:Create(abaTP, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(40, 20, 60), BackgroundTransparency = 0.15, TextColor3 = Color3.fromRGB(180, 180, 190)}):Play()
-        ts:Create(abaAtalho, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(40, 20, 60), BackgroundTransparency = 0.15, TextColor3 = Color3.fromRGB(180, 180, 190)}):Play()
+        ts:Create(abaESP, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(90, 40, 130), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
+        ts:Create(abaAIM, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 25, 75), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(200, 190, 210)}):Play()
+        ts:Create(abaTP, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 25, 75), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(200, 190, 210)}):Play()
+        ts:Create(abaAtalho, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 25, 75), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(200, 190, 210)}):Play()
         ts:Create(abaIndicator, TweenInfo.new(0.15), {Position = UDim2.new(0.255, 0, 1, -1)}):Play()
     elseif aba == "tp" then
-        ts:Create(abaTP, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(80, 30, 120), BackgroundTransparency = 0.1, TextColor3 = Color3.new(1, 1, 1)}):Play()
-        ts:Create(abaAIM, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(40, 20, 60), BackgroundTransparency = 0.15, TextColor3 = Color3.fromRGB(180, 180, 190)}):Play()
-        ts:Create(abaESP, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(40, 20, 60), BackgroundTransparency = 0.15, TextColor3 = Color3.fromRGB(180, 180, 190)}):Play()
-        ts:Create(abaAtalho, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(40, 20, 60), BackgroundTransparency = 0.15, TextColor3 = Color3.fromRGB(180, 180, 190)}):Play()
+        ts:Create(abaTP, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(90, 40, 130), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
+        ts:Create(abaAIM, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 25, 75), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(200, 190, 210)}):Play()
+        ts:Create(abaESP, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 25, 75), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(200, 190, 210)}):Play()
+        ts:Create(abaAtalho, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 25, 75), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(200, 190, 210)}):Play()
         ts:Create(abaIndicator, TweenInfo.new(0.15), {Position = UDim2.new(0.505, 0, 1, -1)}):Play()
     else
-        ts:Create(abaAtalho, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(80, 30, 120), BackgroundTransparency = 0.1, TextColor3 = Color3.new(1, 1, 1)}):Play()
-        ts:Create(abaAIM, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(40, 20, 60), BackgroundTransparency = 0.15, TextColor3 = Color3.fromRGB(180, 180, 190)}):Play()
-        ts:Create(abaESP, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(40, 20, 60), BackgroundTransparency = 0.15, TextColor3 = Color3.fromRGB(180, 180, 190)}):Play()
-        ts:Create(abaTP, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(40, 20, 60), BackgroundTransparency = 0.15, TextColor3 = Color3.fromRGB(180, 180, 190)}):Play()
+        ts:Create(abaAtalho, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(90, 40, 130), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
+        ts:Create(abaAIM, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 25, 75), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(200, 190, 210)}):Play()
+        ts:Create(abaESP, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 25, 75), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(200, 190, 210)}):Play()
+        ts:Create(abaTP, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 25, 75), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(200, 190, 210)}):Play()
         ts:Create(abaIndicator, TweenInfo.new(0.15), {Position = UDim2.new(0.755, 0, 1, -1)}):Play()
     end
 end
