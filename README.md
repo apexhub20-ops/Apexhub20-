@@ -30,7 +30,6 @@ if getgenv().Config.AimInstant == nil then getgenv().Config.AimInstant = false e
 if getgenv().Config.AimNoShake == nil then getgenv().Config.AimNoShake = false end
 if getgenv().Config.SairAimEnabled == nil then getgenv().Config.SairAimEnabled = false end
 if getgenv().Config.ButtonTP == nil then getgenv().Config.ButtonTP = false end
-if getgenv().Config.ButtonBack == nil then getgenv().Config.ButtonBack = false end
 if getgenv().Config.TPInteracao == nil then getgenv().Config.TPInteracao = false end
 if getgenv().Config.TPInteracaoDelay == nil then getgenv().Config.TPInteracaoDelay = 0.50 end
 if getgenv().Config.ButtonFreecam == nil then getgenv().Config.ButtonFreecam = false end
@@ -69,10 +68,6 @@ local markedPosition = nil
 local tpMarker = nil
 local TPConnections = {}
 
-local previousTPPosition = nil
-local hasPreviousTP = false
-local backTPBtn = nil
-
 -- ============================================================
 -- ATALHO STATE
 -- ============================================================
@@ -82,16 +77,13 @@ local ShortcutState = {
 
 local ShortcutPositions = {
     TP = UDim2.fromOffset(60, 200),
-    BACK = UDim2.fromOffset(60, 260),
-    FREECAM = UDim2.fromOffset(60, 320)
+    FREECAM = UDim2.fromOffset(60, 260)
 }
 
 local editStartTPPosition = nil
-local editStartBackPosition = nil
 local editStartFreecamPosition = nil
 
 local shortcutTPButton = nil
-local shortcutBackButton = nil
 local shortcutFreecamGroup = nil
 local shortcutFreecamButton = nil
 local freecamMinusButton = nil
@@ -210,18 +202,18 @@ end
 local function UpdateTPUI()
     if not tpStatusLabel or not tpCoordLabel then return end
     if markedPosition and typeof(markedPosition) == "Vector3" then
-        tpStatusLabel.Text = "✅ LOCAL MARCADO"
+        tpStatusLabel.Text = "LOCAL MARCADO"
         tpStatusLabel.TextColor3 = Color3.fromRGB(80, 255, 120)
         tpCoordLabel.Text = string.format("X: %.1f | Y: %.1f | Z: %.1f", markedPosition.X, markedPosition.Y, markedPosition.Z)
     else
-        tpStatusLabel.Text = "❌ LOCAL NÃO MARCADO"
+        tpStatusLabel.Text = "LOCAL NAO MARCADO"
         tpStatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-        tpCoordLabel.Text = "Nenhuma posição"
+        tpCoordLabel.Text = "Nenhuma posicao"
     end
 end
 
 -- ============================================================
--- TP MARKER (PULSANTE)
+-- TP MARKER
 -- ============================================================
 local function UpdateMarker()
     if tpMarker then tpMarker:Destroy(); tpMarker = nil end
@@ -240,22 +232,6 @@ local function UpdateMarker()
     tpMarker.Color = Color3.fromRGB(160, 50, 200)
     tpMarker.Transparency = 0.2
     tpMarker.Parent = workspace
-
-    local light = Instance.new("PointLight", tpMarker)
-    light.Range = 6
-    light.Color = Color3.fromRGB(160, 50, 200)
-    light.Brightness = 2
-
-    spawn(function()
-        while tpMarker and tpMarker.Parent do
-            ts:Create(light, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {Brightness = 4, Range = 8}):Play()
-            ts:Create(tpMarker, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {Transparency = 0.05, Size = Vector3.new(1.5, 1.5, 1.5)}):Play()
-            task.wait(1)
-            ts:Create(light, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {Brightness = 1, Range = 4}):Play()
-            ts:Create(tpMarker, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {Transparency = 0.4, Size = Vector3.new(0.8, 0.8, 0.8)}):Play()
-            task.wait(1)
-        end
-    end)
 end
 
 -- ============================================================
@@ -270,17 +246,6 @@ local function SetMarkedPosition(position)
     TPState.Mode = "MARKED"
     UpdateMarker()
     UpdateTPUI()
-    return true
-end
-
--- ============================================================
--- TP SAVE PREVIOUS POSITION
--- ============================================================
-local function SavePreviousTPPosition(position)
-    if typeof(position) ~= "Vector3" then return false end
-    previousTPPosition = position
-    hasPreviousTP = true
-    if backTPBtn then backTPBtn.Visible = true end
     return true
 end
 
@@ -350,7 +315,7 @@ local function StartDedoSelection()
         if not screenPosition then return end
         if IsInputOverOurUI(screenPosition) then return end
         local worldPosition = GetWorldPositionFromScreenPosition(screenPosition)
-        if not worldPosition then ShowNotification("LOCAL INVÁLIDO", false); return end
+        if not worldPosition then ShowNotification("LOCAL INVALIDO", false); return end
         if SetMarkedPosition(worldPosition) then
             CancelDedoSelection()
             playPopSound()
@@ -368,57 +333,12 @@ CancelDedoSelection = function()
 end
 
 -- ============================================================
--- TP EFEITO PORTAL
--- ============================================================
-local function CriarEfeitoPortal(posicao, cor)
-    cor = cor or Color3.fromRGB(160, 50, 200)
-    local cores = {
-        Color3.fromRGB(160, 50, 200),
-        Color3.fromRGB(200, 100, 220),
-        Color3.fromRGB(120, 30, 180),
-        Color3.fromRGB(255, 200, 255)
-    }
-    for i, corAnel in ipairs(cores) do
-        local anel = Instance.new("Part")
-        anel.Shape = Enum.PartType.Cylinder
-        anel.Size = Vector3.new(i * 2, 0.3, i * 2)
-        anel.Position = posicao + Vector3.new(0, i * 0.5, 0)
-        anel.Anchored = true
-        anel.CanCollide = false
-        anel.CanTouch = false
-        anel.Material = Enum.Material.Neon
-        anel.Color = corAnel
-        anel.Transparency = 0.3 + (i * 0.1)
-        anel.Parent = workspace
-        ts:Create(anel, TweenInfo.new(1 + i * 0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = Vector3.new(i * 5, 0.3, i * 5), Transparency = 1}):Play()
-        task.delay(1.5 + i * 0.2, function() if anel and anel.Parent then anel:Destroy() end end)
-    end
-    local luz = Instance.new("Part")
-    luz.Shape = Enum.PartType.Ball
-    luz.Size = Vector3.new(2, 2, 2)
-    luz.Position = posicao
-    luz.Anchored = true
-    luz.CanCollide = false
-    luz.CanTouch = false
-    luz.Material = Enum.Material.Neon
-    luz.Color = Color3.fromRGB(255, 200, 255)
-    luz.Transparency = 0.2
-    luz.Parent = workspace
-    local luzPoint = Instance.new("PointLight", luz)
-    luzPoint.Range = 15
-    luzPoint.Color = cor
-    luzPoint.Brightness = 3
-    ts:Create(luz, TweenInfo.new(1, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {Size = Vector3.new(0.5, 0.5, 0.5), Transparency = 1}):Play()
-    task.delay(1.5, function() if luz and luz.Parent then luz:Destroy() end end)
-end
-
--- ============================================================
--- TP TELEPORT (CORRIGIDO)
+-- TP TELEPORT
 -- ============================================================
 local function TeleportarSeguro(posicaoDestino)
-    if typeof(posicaoDestino) ~= "Vector3" then ShowNotification("POSIÇÃO INVÁLIDA", false); return false end
-    if posicaoDestino ~= posicaoDestino then ShowNotification("POSIÇÃO INVÁLIDA", false); return false end
-    if math.abs(posicaoDestino.X) > 100000 or math.abs(posicaoDestino.Y) > 100000 or math.abs(posicaoDestino.Z) > 100000 then ShowNotification("POSIÇÃO MUITO LONGE", false); return false end
+    if typeof(posicaoDestino) ~= "Vector3" then ShowNotification("POSICAO INVALIDA", false); return false end
+    if posicaoDestino ~= posicaoDestino then ShowNotification("POSICAO INVALIDA", false); return false end
+    if math.abs(posicaoDestino.X) > 100000 or math.abs(posicaoDestino.Y) > 100000 or math.abs(posicaoDestino.Z) > 100000 then ShowNotification("POSICAO MUITO LONGE", false); return false end
     if TPState.IsExecuting then return false end
 
     local character = LocalPlayer.Character
@@ -429,9 +349,7 @@ local function TeleportarSeguro(posicaoDestino)
     local root = character:FindFirstChild("HumanoidRootPart")
     if not root then ShowNotification("SEM ROOT PART", false); return false end
 
-    local posicaoOriginal = root.Position
     TPState.IsExecuting = true
-    CriarEfeitoPortal(posicaoDestino, Color3.fromRGB(160, 50, 200))
 
     local sucesso = false
     local tentativas = 0
@@ -489,50 +407,28 @@ local function TeleportarSeguro(posicaoDestino)
         local posicaoFinal = root.Position
         local distanciaFinal = (posicaoFinal - posicaoDestino).Magnitude
         if distanciaFinal < 10 then
-            CriarEfeitoPortal(posicaoDestino, Color3.fromRGB(200, 100, 220))
-            ShowNotification("✅ TELEPORTADO!", true)
-            if posicaoOriginal and (posicaoOriginal - posicaoDestino).Magnitude > 10 then
-                SavePreviousTPPosition(posicaoOriginal)
-            end
+            ShowNotification("TELEPORTADO", true)
             return true
         else
-            ShowNotification("⚠️ TELEPORTE PARCIAL", false)
+            ShowNotification("TELEPORTE PARCIAL", false)
             return true
         end
     else
-        ShowNotification("❌ FALHA NO TELEPORTE", false)
+        ShowNotification("FALHA NO TELEPORTE", false)
         return false
     end
-end
-
-local function PlayTeleportSound()
-    local sound = Instance.new("Sound")
-    sound.SoundId = TP_SOUND_ID
-    sound.Volume = 0.5
-    sound.Parent = SoundService
-    sound:Play()
-    sound.Ended:Connect(function() sound:Destroy() end)
-    task.delay(2, function() if sound and sound.Parent then sound:Destroy() end end)
 end
 
 local function TeleportToMarkedPosition()
     if not markedPosition then ShowNotification("NENHUM LOCAL MARCADO", false); return false end
     local sucesso = TeleportarSeguro(markedPosition)
     if sucesso then
-        PlayTeleportSound()
-        ShowNotification("✅ TELEPORTADO!", true)
+        ShowNotification("TELEPORTADO", true)
         return true
     else
-        ShowNotification("❌ FALHA NO TP", false)
+        ShowNotification("FALHA NO TP", false)
         return false
     end
-end
-
-local function TeleportBack()
-    if not hasPreviousTP or not previousTPPosition then ShowNotification("SEM LOCAL ANTERIOR", false); return false end
-    if TPState.IsExecuting then return false end
-    local sucesso = TeleportarSeguro(previousTPPosition)
-    if sucesso then ShowNotification("VOLTADO", true); return true else ShowNotification("VOLTA FALHOU", false); return false end
 end
 
 -- ============================================================
@@ -775,15 +671,13 @@ end
 -- ============================================================
 local function UpdateShortcutVisibility()
     if shortcutTPButton then shortcutTPButton.Visible = ShortcutState.EditMode or getgenv().Config.ButtonTP == true end
-    if shortcutBackButton then shortcutBackButton.Visible = ShortcutState.EditMode or getgenv().Config.ButtonBack == true end
     if shortcutFreecamGroup then shortcutFreecamGroup.Visible = ShortcutState.EditMode or getgenv().Config.ButtonFreecam == true end
 end
 
 local function EnterShortcutEditMode()
     if ShortcutState.EditMode then return end
-    if not shortcutTPButton or not shortcutBackButton or not shortcutFreecamGroup then return end
+    if not shortcutTPButton or not shortcutFreecamGroup then return end
     editStartTPPosition = shortcutTPButton.Position
-    editStartBackPosition = shortcutBackButton.Position
     editStartFreecamPosition = shortcutFreecamGroup.Position
     ShortcutState.EditMode = true
     if shortcutEditBar then shortcutEditBar.Visible = true end
@@ -792,18 +686,16 @@ end
 
 local function CancelShortcutEdit()
     if shortcutTPButton and editStartTPPosition then shortcutTPButton.Position = editStartTPPosition end
-    if shortcutBackButton and editStartBackPosition then shortcutBackButton.Position = editStartBackPosition end
     if shortcutFreecamGroup and editStartFreecamPosition then shortcutFreecamGroup.Position = editStartFreecamPosition end
     ShortcutState.EditMode = false
     if shortcutEditBar then shortcutEditBar.Visible = false end
     UpdateShortcutVisibility()
-    ShowNotification("ALTERAÇÕES CANCELADAS", false)
+    ShowNotification("ALTERACOES CANCELADAS", false)
 end
 
 local function SaveShortcutEdit()
-    if not shortcutTPButton or not shortcutBackButton or not shortcutFreecamGroup then return end
+    if not shortcutTPButton or not shortcutFreecamGroup then return end
     ShortcutPositions.TP = shortcutTPButton.Position
-    ShortcutPositions.BACK = shortcutBackButton.Position
     ShortcutPositions.FREECAM = shortcutFreecamGroup.Position
     ShortcutState.EditMode = false
     if shortcutEditBar then shortcutEditBar.Visible = false end
@@ -842,7 +734,7 @@ local function MakeShortcutDraggable(button)
 end
 
 -- ============================================================
--- NOTIFICATION SYSTEM (CORES VIVAS)
+-- NOTIFICATION SYSTEM
 -- ============================================================
 local NotifFrame, NotifLabel, NotifIcon
 local NotifToken = 0
@@ -884,7 +776,7 @@ local function CreateNotification()
     NotifIcon.BackgroundTransparency = 1
     NotifIcon.Text = ""
     NotifIcon.TextColor3 = Color3.fromRGB(200, 120, 240)
-    NotifIcon.TextSize = 16
+    NotifIcon.TextSize = 14
     NotifIcon.Font = Enum.Font.GothamBold
     NotifIcon.ZIndex = 1001
     NotifIcon.Parent = NotifFrame
@@ -910,10 +802,10 @@ local function ShowNotification(text, enabled)
     local token = NotifToken
     
     if enabled == false then
-        NotifIcon.Text = "✕"
+        NotifIcon.Text = "X"
         NotifIcon.TextColor3 = Color3.fromRGB(255, 120, 120)
     else
-        NotifIcon.Text = "✓"
+        NotifIcon.Text = "OK"
         NotifIcon.TextColor3 = Color3.fromRGB(120, 255, 160)
     end
     
@@ -1018,7 +910,7 @@ local function CreateSectionLabel(parent, text)
 end
 
 -- ============================================================
--- UI CREATION (ROXO VIBRANTE)
+-- UI CREATION
 -- ============================================================
 for _, v in pairs(game.CoreGui:GetChildren()) do if v.Name == "PRIDE_HUB" then v:Destroy() end end
 ScreenGui = Instance.new("ScreenGui", game.CoreGui); ScreenGui.Name = "PRIDE_HUB"; ScreenGui.IgnoreGuiInset = true
@@ -1096,7 +988,7 @@ local st = Instance.new("TextLabel", hd)
 st.Size = UDim2.new(1, -60, 0, 10)
 st.Position = UDim2.new(0, 12, 0, 22)
 st.BackgroundTransparency = 1
-st.Text = "AIM • ESP • TP • ATALHO"
+st.Text = "AIM | ESP | TP | ATALHO"
 st.TextColor3 = Color3.fromRGB(220, 180, 240)
 st.TextSize = 7
 st.Font = Enum.Font.GothamMedium
@@ -1107,7 +999,7 @@ btnMin.Size = UDim2.new(0, 20, 0, 20)
 btnMin.Position = UDim2.new(1, -44, 0.5, -10)
 btnMin.BackgroundColor3 = Color3.fromRGB(80, 40, 110)
 btnMin.BackgroundTransparency = 0.1
-btnMin.Text = "−"
+btnMin.Text = "-"
 btnMin.TextColor3 = Color3.new(1, 1, 1)
 btnMin.TextSize = 13
 btnMin.Font = Enum.Font.GothamMedium
@@ -1120,7 +1012,7 @@ CloseBtn.Size = UDim2.new(0, 20, 0, 20)
 CloseBtn.Position = UDim2.new(1, -22, 0.5, -10)
 CloseBtn.BackgroundColor3 = Color3.fromRGB(80, 40, 110)
 CloseBtn.BackgroundTransparency = 0.1
-CloseBtn.Text = "×"
+CloseBtn.Text = "x"
 CloseBtn.TextColor3 = Color3.new(1, 1, 1)
 CloseBtn.TextSize = 13
 CloseBtn.Font = Enum.Font.GothamMedium
@@ -1299,6 +1191,7 @@ telaAIM.BorderSizePixel = 0
 telaAIM.Visible = true
 telaAIM.CanvasSize = UDim2.new(0, 0, 0, 0)
 telaAIM.AutomaticCanvasSize = Enum.AutomaticSize.Y
+telaAIM.ElasticBehavior = Enum.ElasticBehavior.Always
 local layAIM = Instance.new("UIListLayout", telaAIM)
 layAIM.Padding = UDim.new(0, 4)
 layAIM.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -1320,6 +1213,7 @@ telaESP.BorderSizePixel = 0
 telaESP.Visible = false
 telaESP.CanvasSize = UDim2.new(0, 0, 0, 0)
 telaESP.AutomaticCanvasSize = Enum.AutomaticSize.Y
+telaESP.ElasticBehavior = Enum.ElasticBehavior.Always
 local layESP = Instance.new("UIListLayout", telaESP)
 layESP.Padding = UDim.new(0, 4)
 layESP.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -1341,6 +1235,7 @@ telaTP.BorderSizePixel = 0
 telaTP.Visible = false
 telaTP.CanvasSize = UDim2.new(0, 0, 0, 0)
 telaTP.AutomaticCanvasSize = Enum.AutomaticSize.Y
+telaTP.ElasticBehavior = Enum.ElasticBehavior.Always
 local layTP = Instance.new("UIListLayout", telaTP)
 layTP.Padding = UDim.new(0, 8)
 layTP.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -1362,6 +1257,7 @@ telaAtalho.BorderSizePixel = 0
 telaAtalho.Visible = false
 telaAtalho.CanvasSize = UDim2.new(0, 0, 0, 0)
 telaAtalho.AutomaticCanvasSize = Enum.AutomaticSize.Y
+telaAtalho.ElasticBehavior = Enum.ElasticBehavior.Always
 local layAtalho = Instance.new("UIListLayout", telaAtalho)
 layAtalho.Padding = UDim.new(0, 8)
 layAtalho.HorizontalAlignment = Enum.HorizontalAlignment.Center
@@ -1373,7 +1269,7 @@ padAtalho.PaddingLeft = UDim.new(0, 8)
 padAtalho.PaddingRight = UDim.new(0, 8)
 
 -- ============================================================
--- COMPONENTES UI (ROXO VIBRANTE)
+-- COMPONENTES UI
 -- ============================================================
 local selectedColorBtn = nil
 
@@ -1458,10 +1354,8 @@ local function AddToggleVertical(name, prop, parent)
         if showNotif then
             if prop == "ButtonTP" then
                 ShowNotification(on and "ATALHO TP ATIVADO" or "ATALHO TP DESATIVADO", on)
-            elseif prop == "ButtonBack" then
-                ShowNotification(on and "ATALHO BACK ATIVADO" or "ATALHO BACK DESATIVADO", on)
             elseif prop == "TPInteracao" then
-                ShowNotification(on and "TP INTERAÇÃO ATIVADO" or "TP INTERAÇÃO DESATIVADO", on)
+                ShowNotification(on and "TP INTERACAO ATIVADO" or "TP INTERACAO DESATIVADO", on)
             elseif prop == "ButtonFreecam" then
                 ShowNotification(on and "BUTTON FREECAM ATIVO" or "BUTTON FREECAM DESATIVADO", on)
             else
@@ -1480,7 +1374,7 @@ local function AddToggleVertical(name, prop, parent)
                 SairAim.Processing = false
                 AimPermitido = true
                 if sairAimInput then sairAimInput.Visible = true end
-                if sairAimContadorLabel then sairAimContadorLabel.Text = "SAÍDAS: 0/" .. tostring(SairAim.Attempts); sairAimContadorLabel.Visible = true end
+                if sairAimContadorLabel then sairAimContadorLabel.Text = "SAIDAS: 0/" .. tostring(SairAim.Attempts); sairAimContadorLabel.Visible = true end
             else
                 SairAim.Enabled = false
                 if sairAimInput then sairAimInput.Visible = false end
@@ -1500,7 +1394,7 @@ local function AddToggleVertical(name, prop, parent)
         if prop == "ButtonFreecam" then
             if not getgenv().Config.ButtonFreecam and FreecamEnabled then DisableFreecam() end
         end
-        if prop == "ButtonTP" or prop == "ButtonBack" or prop == "ButtonFreecam" then UpdateShortcutVisibility() end
+        if prop == "ButtonTP" or prop == "ButtonFreecam" then UpdateShortcutVisibility() end
     end)
     return btn
 end
@@ -1614,7 +1508,7 @@ local function ExecutarSaidaAim()
     SairAim.Processing = true
     SairAim.Count = SairAim.Count + 1
     SairAim.CooldownUntil = os.clock() + SairAimCooldown
-    if sairAimContadorLabel then sairAimContadorLabel.Text = "SAÍDAS: " .. tostring(SairAim.Count) .. "/" .. tostring(SairAim.Attempts) end
+    if sairAimContadorLabel then sairAimContadorLabel.Text = "SAIDAS: " .. tostring(SairAim.Count) .. "/" .. tostring(SairAim.Attempts) end
     AimPermitido = false
     task.delay(SairAimReleaseTime, function() AimPermitido = true; SairAim.Processing = false end)
 end
@@ -1659,7 +1553,7 @@ local PartBtn = Instance.new("TextButton", telaAIM)
 PartBtn.Size = UDim2.new(0.9, 0, 0, 28)
 PartBtn.BackgroundColor3 = Color3.fromRGB(45, 25, 70)
 PartBtn.BackgroundTransparency = 0
-PartBtn.Text = "ALVO: CABEÇA"
+PartBtn.Text = "ALVO: CABECA"
 PartBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 PartBtn.TextSize = 8
 PartBtn.Font = Enum.Font.GothamBold
@@ -1668,8 +1562,8 @@ CreateCorner(PartBtn, 7)
 CreateStroke(PartBtn, Color3.fromRGB(180, 80, 220), 1, 0.3)
 PartBtn.MouseButton1Click:Connect(function()
     getgenv().Config.TargetPart = (getgenv().Config.TargetPart == "Head" and "HumanoidRootPart" or "Head")
-    PartBtn.Text = "ALVO: " .. (getgenv().Config.TargetPart == "Head" and "CABEÇA" or "TRONCO")
-    ShowNotification("ALVO: " .. (getgenv().Config.TargetPart == "Head" and "CABEÇA" or "TRONCO"), true)
+    PartBtn.Text = "ALVO: " .. (getgenv().Config.TargetPart == "Head" and "CABECA" or "TRONCO")
+    ShowNotification("ALVO: " .. (getgenv().Config.TargetPart == "Head" and "CABECA" or "TRONCO"), true)
 end)
 
 CreateSectionLabel(telaAIM, "VELOCIDADE")
@@ -1709,13 +1603,13 @@ sairAimInput.FocusLost:Connect(function()
     else
         sairAimInput.Text = tostring(SairAim.Attempts)
     end
-    if sairAimContadorLabel then sairAimContadorLabel.Text = "SAÍDAS: " .. tostring(SairAim.Count) .. "/" .. tostring(SairAim.Attempts) end
+    if sairAimContadorLabel then sairAimContadorLabel.Text = "SAIDAS: " .. tostring(SairAim.Count) .. "/" .. tostring(SairAim.Attempts) end
 end)
 
 sairAimContadorLabel = Instance.new("TextLabel", telaAIM)
 sairAimContadorLabel.Size = UDim2.new(0.9, 0, 0, 16)
 sairAimContadorLabel.BackgroundTransparency = 1
-sairAimContadorLabel.Text = "SAÍDAS: 0/3"
+sairAimContadorLabel.Text = "SAIDAS: 0/3"
 sairAimContadorLabel.TextColor3 = Color3.fromRGB(220, 140, 250)
 sairAimContadorLabel.TextSize = 9
 sairAimContadorLabel.Font = Enum.Font.GothamBold
@@ -1757,7 +1651,7 @@ CreateSectionLabel(telaTP, "TELEPORTE")
 tpStatusLabel = Instance.new("TextLabel", telaTP)
 tpStatusLabel.Size = UDim2.new(0.9, 0, 0, 18)
 tpStatusLabel.BackgroundTransparency = 1
-tpStatusLabel.Text = "❌ LOCAL NÃO MARCADO"
+tpStatusLabel.Text = "LOCAL NAO MARCADO"
 tpStatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
 tpStatusLabel.TextSize = 10
 tpStatusLabel.Font = Enum.Font.GothamBold
@@ -1767,7 +1661,7 @@ tpStatusLabel.LayoutOrder = 1
 tpCoordLabel = Instance.new("TextLabel", telaTP)
 tpCoordLabel.Size = UDim2.new(0.9, 0, 0, 18)
 tpCoordLabel.BackgroundTransparency = 1
-tpCoordLabel.Text = "Nenhuma posição"
+tpCoordLabel.Text = "Nenhuma posicao"
 tpCoordLabel.TextColor3 = Color3.fromRGB(220, 140, 250)
 tpCoordLabel.TextSize = 9
 tpCoordLabel.Font = Enum.Font.GothamMedium
@@ -1780,7 +1674,7 @@ local marcarBtn = Instance.new("TextButton", telaTP)
 marcarBtn.Size = UDim2.new(0.9, 0, 0, 34)
 marcarBtn.BackgroundColor3 = Color3.fromRGB(50, 28, 75)
 marcarBtn.BackgroundTransparency = 0
-marcarBtn.Text = "📍 MARCAR"
+marcarBtn.Text = "MARCAR"
 marcarBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 marcarBtn.TextSize = 11
 marcarBtn.Font = Enum.Font.GothamBold
@@ -1808,7 +1702,7 @@ marcarBtn.MouseButton1Click:Connect(function()
     dedoBtn.Position = UDim2.new(0, 0, 0, 2)
     dedoBtn.BackgroundColor3 = Color3.fromRGB(55, 30, 80)
     dedoBtn.BackgroundTransparency = 0
-    dedoBtn.Text = "👆 DEDO"
+    dedoBtn.Text = "DEDO"
     dedoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     dedoBtn.TextSize = 10
     dedoBtn.Font = Enum.Font.GothamBold
@@ -1820,7 +1714,7 @@ marcarBtn.MouseButton1Click:Connect(function()
     agoraBtn.Position = UDim2.new(0.52, 0, 0, 2)
     agoraBtn.BackgroundColor3 = Color3.fromRGB(55, 30, 80)
     agoraBtn.BackgroundTransparency = 0
-    agoraBtn.Text = "⚡ AGORA"
+    agoraBtn.Text = "AGORA"
     agoraBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     agoraBtn.TextSize = 10
     agoraBtn.Font = Enum.Font.GothamBold
@@ -1844,21 +1738,16 @@ marcarBtn.MouseButton1Click:Connect(function()
     end)
 end)
 
-local tpButtonFrame = Instance.new("Frame", telaTP)
-tpButtonFrame.Size = UDim2.new(0.9, 0, 0, 34)
-tpButtonFrame.BackgroundTransparency = 1
-tpButtonFrame.LayoutOrder = 5
-
-local tpBtn = Instance.new("TextButton", tpButtonFrame)
-tpBtn.Size = UDim2.new(0.78, 0, 0, 34)
-tpBtn.Position = UDim2.new(0, 0, 0, 0)
+local tpBtn = Instance.new("TextButton", telaTP)
+tpBtn.Size = UDim2.new(0.9, 0, 0, 34)
 tpBtn.BackgroundColor3 = Color3.fromRGB(50, 28, 75)
 tpBtn.BackgroundTransparency = 0
-tpBtn.Text = "🌀 TELEPORTAR"
+tpBtn.Text = "TELEPORTAR"
 tpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 tpBtn.TextSize = 11
 tpBtn.Font = Enum.Font.GothamBold
 tpBtn.AutoButtonColor = false
+tpBtn.LayoutOrder = 5
 CreateCorner(tpBtn, 7)
 CreateStroke(tpBtn, Color3.fromRGB(180, 80, 220), 1.5, 0.3)
 
@@ -1870,33 +1759,14 @@ tpBtnGrad.Color = ColorSequence.new({
 })
 tpBtnGrad.Rotation = 90
 
-backTPBtn = Instance.new("TextButton", tpButtonFrame)
-backTPBtn.Size = UDim2.new(0, 38, 0, 34)
-backTPBtn.Position = UDim2.new(0.82, 4, 0, 0)
-backTPBtn.BackgroundColor3 = Color3.fromRGB(50, 28, 75)
-backTPBtn.BackgroundTransparency = 0
-backTPBtn.Text = "⬅️"
-backTPBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-backTPBtn.TextSize = 14
-backTPBtn.Font = Enum.Font.GothamBold
-backTPBtn.AutoButtonColor = false
-backTPBtn.Visible = false
-CreateCorner(backTPBtn, 7)
-CreateStroke(backTPBtn, Color3.fromRGB(180, 80, 220), 1.5, 0.3)
-
 tpBtn.MouseButton1Click:Connect(function() TeleportToMarkedPosition() end)
-backTPBtn.MouseButton1Click:Connect(function()
-    AnimateButton(backTPBtn, {Size = UDim2.new(0, 34, 0, 30)}, 0.08)
-    TeleportBack()
-    AnimateButton(backTPBtn, {Size = UDim2.new(0, 38, 0, 34)}, 0.08)
-end)
 
 -- Botão FORÇAR TP
 local btnForcar = Instance.new("TextButton", telaTP)
 btnForcar.Size = UDim2.new(0.9, 0, 0, 28)
 btnForcar.BackgroundColor3 = Color3.fromRGB(55, 30, 80)
 btnForcar.BackgroundTransparency = 0
-btnForcar.Text = "⚡ FORÇAR TP (FALLBACK)"
+btnForcar.Text = "FORCAR TP"
 btnForcar.TextColor3 = Color3.fromRGB(255, 210, 130)
 btnForcar.TextSize = 9
 btnForcar.Font = Enum.Font.GothamBold
@@ -1906,7 +1776,7 @@ CreateCorner(btnForcar, 7)
 CreateStroke(btnForcar, Color3.fromRGB(255, 210, 130), 1, 0.3)
 btnForcar.MouseButton1Click:Connect(function()
     if not markedPosition then ShowNotification("NENHUM LOCAL MARCADO", false); return end
-    ShowNotification("🔄 FORÇANDO TP...", true)
+    ShowNotification("FORCANDO TP", true)
     local character = LocalPlayer.Character
     if not character then ShowNotification("SEM PERSONAGEM", false); return end
     local root = character:FindFirstChild("HumanoidRootPart")
@@ -1916,7 +1786,7 @@ btnForcar.MouseButton1Click:Connect(function()
     pcall(function() root.CFrame = CFrame.new(markedPosition) end)
     task.wait(0.05)
     local distancia = (root.Position - markedPosition).Magnitude
-    if distancia < 10 then ShowNotification("✅ FORÇADO COM SUCESSO!", true) else ShowNotification("⚠️ FALHA NO FORÇADO", false) end
+    if distancia < 10 then ShowNotification("FORCADO COM SUCESSO", true) else ShowNotification("FALHA NO FORCADO", false) end
 end)
 
 -- ============================================================
@@ -1924,8 +1794,7 @@ end)
 -- ============================================================
 CreateSectionLabel(telaAtalho, "ATALHO")
 AddToggleVertical("Button TP", "ButtonTP", telaAtalho)
-AddToggleVertical("Button BACK", "ButtonBack", telaAtalho)
-AddToggleVertical("TP INTERAÇÃO", "TPInteracao", telaAtalho)
+AddToggleVertical("TP INTERACAO", "TPInteracao", telaAtalho)
 
 local tpDelayContainer = Instance.new("Frame", telaAtalho)
 tpDelayContainer.Size = UDim2.new(0.9, 0, 0, 32)
@@ -1976,9 +1845,9 @@ shortcutConfigButton = Instance.new("TextButton", telaAtalho)
 shortcutConfigButton.Size = UDim2.new(0.5, 0, 0, 36)
 shortcutConfigButton.BackgroundColor3 = Color3.fromRGB(50, 28, 75)
 shortcutConfigButton.BackgroundTransparency = 0
-shortcutConfigButton.Text = "⚙️"
+shortcutConfigButton.Text = "EDITAR"
 shortcutConfigButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-shortcutConfigButton.TextSize = 16
+shortcutConfigButton.TextSize = 10
 shortcutConfigButton.Font = Enum.Font.GothamBold
 shortcutConfigButton.AutoButtonColor = false
 shortcutConfigButton.LayoutOrder = 10
@@ -1987,13 +1856,13 @@ CreateStroke(shortcutConfigButton, Color3.fromRGB(180, 80, 220), 1.5, 0.3)
 shortcutConfigButton.MouseButton1Click:Connect(function() EnterShortcutEditMode() end)
 
 -- ============================================================
--- BOTÕES FLUTUANTES (COM ÍCONES)
+-- BOTÕES FLUTUANTES
 -- ============================================================
 shortcutTPButton = Instance.new("TextButton", ScreenGui)
 shortcutTPButton.Size = UDim2.new(0, 50, 0, 50)
 shortcutTPButton.Position = ShortcutPositions.TP
-shortcutTPButton.Text = "🚪"
-shortcutTPButton.TextSize = 22
+shortcutTPButton.Text = "TP"
+shortcutTPButton.TextSize = 12
 shortcutTPButton.BackgroundColor3 = Color3.fromRGB(50, 28, 75)
 shortcutTPButton.BackgroundTransparency = 0
 shortcutTPButton.TextColor3 = Color3.new(1, 1, 1)
@@ -2012,29 +1881,6 @@ tpGrad.Color = ColorSequence.new({
 })
 tpGrad.Rotation = 45
 
-shortcutBackButton = Instance.new("TextButton", ScreenGui)
-shortcutBackButton.Size = UDim2.new(0, 50, 0, 50)
-shortcutBackButton.Position = ShortcutPositions.BACK
-shortcutBackButton.Text = "↩️"
-shortcutBackButton.TextSize = 22
-shortcutBackButton.BackgroundColor3 = Color3.fromRGB(50, 28, 75)
-shortcutBackButton.BackgroundTransparency = 0
-shortcutBackButton.TextColor3 = Color3.new(1, 1, 1)
-shortcutBackButton.Font = Enum.Font.GothamBold
-shortcutBackButton.AutoButtonColor = false
-shortcutBackButton.Visible = false
-shortcutBackButton.ZIndex = 500
-CreateCorner(shortcutBackButton, 25)
-CreateStroke(shortcutBackButton, Color3.fromRGB(200, 80, 240), 2, 0.3)
-
-local backGrad = Instance.new("UIGradient", shortcutBackButton)
-backGrad.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(100, 40, 140)),
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(180, 60, 220)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 40, 140))
-})
-backGrad.Rotation = 45
-
 shortcutFreecamGroup = Instance.new("Frame", ScreenGui)
 shortcutFreecamGroup.Size = UDim2.new(0, 170, 0, 50)
 shortcutFreecamGroup.Position = ShortcutPositions.FREECAM
@@ -2045,8 +1891,8 @@ shortcutFreecamGroup.ZIndex = 500
 shortcutFreecamButton = Instance.new("TextButton", shortcutFreecamGroup)
 shortcutFreecamButton.Size = UDim2.new(0, 70, 0, 50)
 shortcutFreecamButton.Position = UDim2.new(0, 0, 0, 0)
-shortcutFreecamButton.Text = "👁️"
-shortcutFreecamButton.TextSize = 22
+shortcutFreecamButton.Text = "FREECAM"
+shortcutFreecamButton.TextSize = 9
 shortcutFreecamButton.BackgroundColor3 = Color3.fromRGB(50, 28, 75)
 shortcutFreecamButton.BackgroundTransparency = 0
 shortcutFreecamButton.TextColor3 = Color3.new(1, 1, 1)
@@ -2142,16 +1988,11 @@ cancelEditBtn.MouseButton1Click:Connect(function() CancelShortcutEdit() end)
 saveEditBtn.MouseButton1Click:Connect(function() SaveShortcutEdit() end)
 
 MakeShortcutDraggable(shortcutTPButton)
-MakeShortcutDraggable(shortcutBackButton)
 MakeShortcutDraggable(shortcutFreecamGroup)
 UpdateShortcutVisibility()
 
 shortcutTPButton.MouseButton1Click:Connect(function()
     if not ShortcutState.EditMode then TeleportToMarkedPosition() end
-end)
-
-shortcutBackButton.MouseButton1Click:Connect(function()
-    if not ShortcutState.EditMode then TeleportBack() end
 end)
 
 shortcutFreecamButton.MouseButton1Click:Connect(function()
@@ -2387,4 +2228,4 @@ end)
 -- Iniciar TP Interação se já estiver ativo
 if getgenv().Config.TPInteracao then
     StartTPInteracao()
-end
+end 
