@@ -38,6 +38,7 @@ if getgenv().Config.ProxInstant == nil then getgenv().Config.ProxInstant = false
 if getgenv().Config.ProxAutoFarm == nil then getgenv().Config.ProxAutoFarm = false end
 if getgenv().Config.ProxHideFiltered == nil then getgenv().Config.ProxHideFiltered = false end
 if getgenv().Config.ProxShowOnlyFiltered == nil then getgenv().Config.ProxShowOnlyFiltered = false end
+if getgenv().Config.ProxHideFiltered and getgenv().Config.ProxShowOnlyFiltered then getgenv().Config.ProxShowOnlyFiltered = false end
 
 local espColor = Color3.new(1, 0, 0)
 local fovColor = Color3.new(1, 0, 0)
@@ -500,13 +501,39 @@ local function ProxGetName(p)
     return "ProximityPrompt"
 end
 
-local function ProxMatch(p)
+local function ProxIsAutoPickupPart(part)
+    if not part or not part:IsA("BasePart") or not part.CanTouch then return false end
+    return part:FindFirstChild("TouchInterest") ~= nil
+        or part:FindFirstChild("TouchTransmitter") ~= nil
+        or part:FindFirstChildOfClass("TouchTransmitter") ~= nil
+end
+
+local function ProxGetAutoPickupRoot(part)
+    local model = part:FindFirstAncestorOfClass("Model")
+    if model and model ~= LocalPlayer.Character then return model end
+    return part
+end
+
+local function ProxGetAutoPickupName(root, part)
+    local name = root and root.Name or (part and part.Name) or "Auto Pickup"
+    return "AUTO PICKUP: " .. name
+end
+
+local function ProxMatchesSelectedName(itemName)
     if #ProxSelectedItems == 0 then return false end
-    local lowerName = string.lower(ProxGetName(p))
+    local lowerName = string.lower(tostring(itemName or ""))
     for _, selected in ipairs(ProxSelectedItems) do
-        if lowerName == string.lower(selected) then return true end
+        if lowerName == string.lower(tostring(selected)) then return true end
     end
     return false
+end
+
+local function ProxIsFilteredName(itemName)
+    return ProxMatchesSelectedName(itemName)
+end
+
+local function ProxMatch(p)
+    return ProxIsFilteredName(ProxGetName(p))
 end
 
 local function ProxInstant(p)
@@ -546,6 +573,46 @@ local function ProxGetDistance(part)
     return (hrp.Position - part.Position).Magnitude
 end
 
+local function ProxGetAutoPickupTargets()
+    local targets = {}
+    local seen = {}
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if ProxIsAutoPickupPart(obj) then
+            local character = LocalPlayer.Character
+            if not character or not obj:IsDescendantOf(character) then
+                local root = ProxGetAutoPickupRoot(obj)
+                local key = tostring(root:GetDebugId())
+                if not seen[key] then
+                    seen[key] = true
+                    table.insert(targets, {
+                        part = obj,
+                        name = ProxGetAutoPickupName(root, obj),
+                        id = "autopickup_" .. key,
+                        kind = "auto",
+                        distance = ProxGetDistance(obj)
+                    })
+                end
+            end
+        end
+    end
+    return targets
+end
+
+local function ProxCollectAutoPickup(part)
+    local character, root = GetCharacterRoot()
+    if not character or not root or not part or not part.Parent then return false end
+    if type(firetouchinterest) == "function" then
+        local ok = pcall(function()
+            firetouchinterest(root, part, 0)
+            task.wait()
+            firetouchinterest(root, part, 1)
+        end)
+        if ok then return true end
+    end
+    pcall(function() character:PivotTo(part.CFrame * CFrame.new(0, 2, 0)) end)
+    return true
+end
+
 local function ProxInHistory(id)
     for _, h in ipairs(ProxTPHistory) do
         if h == id then return true end
@@ -569,6 +636,43 @@ local function ProxUpdateSelectedLabel()
         proxSelectedLabel.Text = table.concat(ProxSelectedItems, " • ")
         proxSelectedLabel.TextColor3 = THEME.accent
     end
+end
+
+local function ProxTagMatches(itemName, tag)
+    local rawName = string.lower(tostring(itemName or ""))
+    local cleanTag = string.lower(tostring(tag or "")):gsub("^%s*(.-)%s*$", "%1")
+    cleanTag = cleanTag:gsub("%s+", " ")
+    if cleanTag == "" then return false end
+
+    local isAutoPickup = rawName:find("^auto pickup:") ~= nil
+    local nameWithoutAutoPrefix = rawName:gsub("^auto pickup:%s*", "")
+    local compactTag = cleanTag:gsub("[%s_:%-]+", "")
+
+    -- "pickup" e "auto pickup" sao tags globais dos objetos de toque.
+    if compactTag == "pickup" or compactTag == "autopickup" then
+        return isAutoPickup
+    end
+
+    return rawName:sub(1, #cleanTag) == cleanTag
+        or nameWithoutAutoPrefix:sub(1, #cleanTag) == cleanTag
+end
+
+local function ProxSelectByTag(tag)
+    local added = 0
+    for itemName in pairs(ProxItemCounts) do
+        if ProxTagMatches(itemName, tag) then
+            local exists = false
+            for _, selected in ipairs(ProxSelectedItems) do
+                if selected == itemName then exists = true break end
+            end
+            if not exists then
+                table.insert(ProxSelectedItems, itemName)
+                added = added + 1
+            end
+        end
+    end
+    ProxUpdateSelectedLabel()
+    return added
 end
 
 local function ProxToggleItem(itemName)
@@ -693,9 +797,16 @@ local function ProxTeleportRotativo()
                 table.insert(targets, {
                     part = part,
                     distance = ProxGetDistance(part),
-                    id = tostring(part:GetDebugId())
+                    id = tostring(part:GetDebugId()),
+                    name = ProxGetName(p)
                 })
             end
+        end
+    end
+
+    for _, autoTarget in ipairs(ProxGetAutoPickupTargets()) do
+        if ProxMatchesSelectedName(autoTarget.name) then
+            table.insert(targets, autoTarget)
         end
     end
 
@@ -721,7 +832,7 @@ local function ProxTeleportRotativo()
     if not root then ShowNotification("SEM PERSONAGEM", false); return end
     root.CFrame = target.part.CFrame * CFrame.new(0, 5, 0)
     ProxAddHistory(target.id)
-    ShowNotification("TP: " .. ProxGetName(target.part:FindFirstChildOfClass("ProximityPrompt") or target.part), true)
+    ShowNotification("TP: " .. tostring(target.name or "ITEM"), true)
 end
 
 -- ============================================================
@@ -1391,6 +1502,7 @@ telaAIM.Visible = true
 -- COMPONENTES UI
 -- ============================================================
 local selectedColorBtn = nil
+local ToggleRefreshers = {}
 
 local function criarSeletorCores(parent, callback)
     local frame = Instance.new("Frame", parent)
@@ -1450,6 +1562,8 @@ local function AddToggleVertical(name, prop, parent)
     label.Font = Enum.Font.GothamBold
     label.TextXAlignment = Enum.TextXAlignment.Left
 
+    local toggleStroke = CreateStroke(btn, THEME.stroke, 1, 0.55)
+
     local toggleDot = Instance.new("Frame", btn)
     toggleDot.Size = UDim2.new(0, 30, 0, 16)
     toggleDot.Position = UDim2.new(1, -38, 0.5, -8)
@@ -1469,6 +1583,7 @@ local function AddToggleVertical(name, prop, parent)
         ts:Create(dot, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = UDim2.new(0, on and 16 or 2, 0.5, -6), BackgroundColor3 = on and THEME.white or Color3.fromRGB(170, 155, 195)}):Play()
         ts:Create(toggleDot, TweenInfo.new(0.15), {BackgroundColor3 = on and THEME.accent or Color3.fromRGB(210, 200, 230)}):Play()
         ts:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = on and THEME.cardHover or THEME.card}):Play()
+        ts:Create(toggleStroke, TweenInfo.new(0.15), {Transparency = on and 0.15 or 0.55}):Play()
         if showNotif then
             if prop == "ButtonTP" then
                 ShowNotification(on and "ATALHO TP ATIVADO" or "ATALHO TP DESATIVADO", on)
@@ -1481,9 +1596,26 @@ local function AddToggleVertical(name, prop, parent)
             end
         end
     end
+    ToggleRefreshers[prop] = updateToggle
+    btn.MouseEnter:Connect(function()
+        ts:Create(btn, TweenInfo.new(0.12), {BackgroundColor3 = THEME.cardHover}):Play()
+        ts:Create(toggleStroke, TweenInfo.new(0.12), {Transparency = 0.1}):Play()
+    end)
+    btn.MouseLeave:Connect(function()
+        local on = getgenv().Config[prop]
+        ts:Create(btn, TweenInfo.new(0.16), {BackgroundColor3 = on and THEME.cardHover or THEME.card}):Play()
+        ts:Create(toggleStroke, TweenInfo.new(0.16), {Transparency = on and 0.15 or 0.55}):Play()
+    end)
     updateToggle(false)
     btn.MouseButton1Click:Connect(function()
         getgenv().Config[prop] = not getgenv().Config[prop]
+        if prop == "ProxHideFiltered" and getgenv().Config[prop] then
+            getgenv().Config.ProxShowOnlyFiltered = false
+            if ToggleRefreshers.ProxShowOnlyFiltered then ToggleRefreshers.ProxShowOnlyFiltered(false) end
+        elseif prop == "ProxShowOnlyFiltered" and getgenv().Config[prop] then
+            getgenv().Config.ProxHideFiltered = false
+            if ToggleRefreshers.ProxHideFiltered then ToggleRefreshers.ProxHideFiltered(false) end
+        end
         updateToggle(true)
 
         if prop == "SairAimEnabled" then
@@ -1938,7 +2070,7 @@ proxAddContainer.BackgroundTransparency = 1
 proxManualBox = Instance.new("TextBox", proxAddContainer)
 proxManualBox.Size = UDim2.new(1, -62, 1, 0)
 proxManualBox.BackgroundColor3 = THEME.bgSoft
-proxManualBox.PlaceholderText = "Nome do item..."
+proxManualBox.PlaceholderText = "Item ou tag (ex: pickup)..."
 proxManualBox.PlaceholderColor3 = THEME.textSoft
 proxManualBox.Text = ""
 proxManualBox.TextColor3 = THEME.text
@@ -1971,6 +2103,12 @@ proxAddBtn.MouseButton1Click:Connect(function()
             return
         end
     end
+    local tagged = ProxSelectByTag(texto)
+    if tagged > 0 then
+        ShowNotification("TAG MARCADA: " .. tagged, true)
+        proxManualBox.Text = ""
+        return
+    end
     table.insert(ProxSelectedItems, texto)
     ProxUpdateSelectedLabel()
     ShowNotification("ADICIONADO: " .. texto, true)
@@ -1980,6 +2118,34 @@ proxAddBtn.MouseButton1Click:Connect(function()
         data.button.BackgroundColor3 = THEME.accent
         data.nameLabel.TextColor3 = THEME.white
     end
+end)
+
+local proxTagBtn = Instance.new("TextButton", telaProx)
+proxTagBtn.Size = UDim2.new(0.9, 0, 0, 26)
+proxTagBtn.BackgroundColor3 = THEME.card
+proxTagBtn.Text = "MARCAR TAG / PREFIXO"
+proxTagBtn.TextColor3 = THEME.accent
+proxTagBtn.TextStrokeTransparency = 1
+proxTagBtn.Font = Enum.Font.GothamBold
+proxTagBtn.TextSize = 8
+proxTagBtn.AutoButtonColor = false
+proxTagBtn.BorderSizePixel = 0
+CreateCorner(proxTagBtn, 6)
+local proxTagStroke = CreateStroke(proxTagBtn, THEME.stroke, 1, 0.55)
+proxTagBtn.MouseEnter:Connect(function()
+    ts:Create(proxTagBtn, TweenInfo.new(0.12), {BackgroundColor3 = THEME.cardHover}):Play()
+    ts:Create(proxTagStroke, TweenInfo.new(0.12), {Transparency = 0.1}):Play()
+end)
+proxTagBtn.MouseLeave:Connect(function()
+    ts:Create(proxTagBtn, TweenInfo.new(0.16), {BackgroundColor3 = THEME.card}):Play()
+    ts:Create(proxTagStroke, TweenInfo.new(0.16), {Transparency = 0.55}):Play()
+end)
+proxTagBtn.MouseButton1Click:Connect(function()
+    local tag = proxManualBox.Text:gsub("^%s*(.-)%s*$", "%1")
+    if tag == "" then return end
+    local added = ProxSelectByTag(tag)
+    ShowNotification(added > 0 and ("TAG MARCADA: " .. added) or "NENHUM ITEM COM ESSA TAG", added > 0)
+    proxManualBox.Text = ""
 end)
 
 -- LIMPAR
@@ -2436,6 +2602,30 @@ task.spawn(function()
             end
         end
 
+        for _, autoTarget in ipairs(ProxGetAutoPickupTargets()) do
+            ProxItemCounts[autoTarget.name] = (ProxItemCounts[autoTarget.name] or 0) + 1
+            local filtered = ProxIsFilteredName(autoTarget.name)
+            local showAuto = true
+            if getgenv().Config.ProxHideFiltered and filtered then showAuto = false end
+            if getgenv().Config.ProxShowOnlyFiltered and not filtered then showAuto = false end
+            if getgenv().Config.ProxESP and showAuto then
+                local b = Instance.new("BillboardGui", ProxFolder)
+                b.Name = "AutoPickupESP"
+                b.Adornee = autoTarget.part
+                b.Size = UDim2.new(0, 150, 0, 30)
+                b.AlwaysOnTop = true
+                b.StudsOffset = Vector3.new(0, 2.5, 0)
+                local txt = Instance.new("TextLabel", b)
+                txt.Size = UDim2.new(1, 0, 1, 0)
+                txt.BackgroundTransparency = 1
+                txt.TextScaled = true
+                txt.Font = Enum.Font.GothamBold
+                txt.TextStrokeTransparency = 0.35
+                txt.Text = autoTarget.name
+                txt.TextColor3 = filtered and Color3.fromRGB(255, 200, 60) or Color3.fromRGB(255, 190, 70)
+            end
+        end
+
         if telaProx.Visible then
             ProxUpdateItemList(proxSearchBox and proxSearchBox.Text or "")
         end
@@ -2456,9 +2646,15 @@ task.spawn(function()
                     if part and ProxMatch(p) then
                         local promptId = tostring(p:GetDebugId())
                         if not ProxInteracted[promptId] then
-                            table.insert(targets, { prompt = p, part = part, distance = ProxGetDistance(part), id = promptId })
+                            table.insert(targets, { prompt = p, part = part, distance = ProxGetDistance(part), id = promptId, kind = "prompt", name = ProxGetName(p) })
                         end
                     end
+                end
+            end
+
+            for _, autoTarget in ipairs(ProxGetAutoPickupTargets()) do
+                if ProxMatchesSelectedName(autoTarget.name) and not ProxInteracted[autoTarget.id] then
+                    table.insert(targets, autoTarget)
                 end
             end
 
@@ -2471,7 +2667,11 @@ task.spawn(function()
                 if root then
                     root.CFrame = target.part.CFrame * CFrame.new(0, 5, 0)
                     task.wait(0.5)
-                    pcall(function() fireproximityprompt(target.prompt) end)
+                    if target.kind == "auto" then
+                        ProxCollectAutoPickup(target.part)
+                    else
+                        pcall(function() fireproximityprompt(target.prompt) end)
+                    end
                     ProxInteracted[target.id] = true
                     task.wait(1)
                 end
@@ -2618,4 +2818,4 @@ if getgenv().Config.TPInteracao then
     StartTPInteracao()
 end
 
-print("PRIDE HUB carregado | aba PROX adicionada")
+print("PRIDE HUB carregado | filtros corrigidos e UI animada")
