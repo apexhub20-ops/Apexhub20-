@@ -33,6 +33,11 @@ if getgenv().Config.ButtonTP == nil then getgenv().Config.ButtonTP = false end
 if getgenv().Config.TPInteracao == nil then getgenv().Config.TPInteracao = false end
 if getgenv().Config.TPInteracaoDelay == nil then getgenv().Config.TPInteracaoDelay = 0.50 end
 if getgenv().Config.ButtonFreecam == nil then getgenv().Config.ButtonFreecam = false end
+if getgenv().Config.ProxESP == nil then getgenv().Config.ProxESP = false end
+if getgenv().Config.ProxInstant == nil then getgenv().Config.ProxInstant = false end
+if getgenv().Config.ProxAutoFarm == nil then getgenv().Config.ProxAutoFarm = false end
+if getgenv().Config.ProxHideFiltered == nil then getgenv().Config.ProxHideFiltered = false end
+if getgenv().Config.ProxShowOnlyFiltered == nil then getgenv().Config.ProxShowOnlyFiltered = false end
 
 local espColor = Color3.new(1, 0, 0)
 local fovColor = Color3.new(1, 0, 0)
@@ -53,10 +58,27 @@ local ESP_Lines = {}
 local ESP_Table = {}
 
 -- ============================================================
+-- TEMA CLARO
+-- ============================================================
+local THEME = {
+    bg        = Color3.fromRGB(240, 235, 250),
+    bgSoft    = Color3.fromRGB(250, 247, 255),
+    card      = Color3.fromRGB(228, 220, 245),
+    cardHover = Color3.fromRGB(216, 204, 240),
+    accent    = Color3.fromRGB(150, 90, 235),
+    accent2   = Color3.fromRGB(190, 140, 250),
+    stroke    = Color3.fromRGB(180, 140, 240),
+    text      = Color3.fromRGB(60, 40, 95),
+    textSoft  = Color3.fromRGB(110, 90, 145),
+    white     = Color3.fromRGB(255, 255, 255),
+    ok        = Color3.fromRGB(70, 190, 130),
+    warn      = Color3.fromRGB(235, 170, 60),
+    bad       = Color3.fromRGB(235, 95, 110),
+}
+
+-- ============================================================
 -- TP STATE
 -- ============================================================
-local TP_SOUND_ID = "rbxassetid://5066021887"
-
 local TPState = {
     Mode = "NONE",
     HasMark = false,
@@ -71,9 +93,7 @@ local TPConnections = {}
 -- ============================================================
 -- ATALHO STATE
 -- ============================================================
-local ShortcutState = {
-    EditMode = false
-}
+local ShortcutState = { EditMode = false }
 
 local ShortcutPositions = {
     TP = UDim2.fromOffset(60, 200),
@@ -95,22 +115,14 @@ local shortcutEditBar = nil
 -- ============================================================
 -- TP INTERAÇÃO STATE
 -- ============================================================
-local TPInteracaoState = {
-    Enabled = false,
-    Waiting = false,
-    InteractionId = 0
-}
-
+local TPInteracaoState = { Enabled = false, Waiting = false, InteractionId = 0 }
 local TPInteracaoConnections = {}
 local tpInteracaoPending = false
 
 -- ============================================================
 -- FREECAM STATE
 -- ============================================================
-_G.JoystickData = _G.JoystickData or {
-    DraggingLevel = 0,
-    Direction = Vector3.new(0, 0, 0)
-}
+_G.JoystickData = _G.JoystickData or { DraggingLevel = 0, Direction = Vector3.new(0, 0, 0) }
 
 local FreecamEnabled = false
 local movePart = nil
@@ -135,34 +147,50 @@ local sizeInner = 50
 local joystickRadius = sizeOuter / 2
 
 -- ============================================================
--- TP FORWARD DECLARATIONS
+-- FORWARD DECLARATIONS
 -- ============================================================
 local ScreenGui
 local tpStatusLabel
 local tpCoordLabel
 local tpOptionFrame
 local CancelDedoSelection
+local ShowNotification
+local playPopSound
 
 -- ============================================================
--- FUNÇÃO PARA ESCONDER BOTÃO DE PULO MOBILE
+-- PROXIMY STATE
+-- ============================================================
+local ProxFolder = nil
+local ProxSelectedItems = {}
+local ProxItemCounts = {}
+local ProxItemButtons = {}
+local ProxInteracted = {}
+local ProxModified = {}
+local ProxTPHistory = {}
+local ProxMaxHistory = 10
+local ProxBusy = false
+local ProxListExpanded = false
+local proxSelectedLabel = nil
+local proxListTitle = nil
+local proxItemScroll = nil
+local proxSearchBox = nil
+local proxManualBox = nil
+
+-- ============================================================
+-- JUMP BUTTON MOBILE
 -- ============================================================
 local function SetJumpButtonVisible(visible)
     pcall(function()
         local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
         if not playerGui then return end
-        
-        local function processGui(gui)
-            for _, obj in ipairs(gui:GetDescendants()) do
-                if obj:IsA("GuiObject") then
-                    local name = string.lower(obj.Name)
-                    if name:find("jump") or name:find("pulo") then
-                        obj.Visible = visible
-                    end
+        for _, obj in ipairs(playerGui:GetDescendants()) do
+            if obj:IsA("GuiObject") then
+                local name = string.lower(obj.Name)
+                if name:find("jump") or name:find("pulo") then
+                    obj.Visible = visible
                 end
             end
         end
-        
-        processGui(playerGui)
     end)
 end
 
@@ -203,11 +231,11 @@ local function UpdateTPUI()
     if not tpStatusLabel or not tpCoordLabel then return end
     if markedPosition and typeof(markedPosition) == "Vector3" then
         tpStatusLabel.Text = "LOCAL MARCADO"
-        tpStatusLabel.TextColor3 = Color3.fromRGB(80, 255, 120)
+        tpStatusLabel.TextColor3 = THEME.ok
         tpCoordLabel.Text = string.format("X: %.1f | Y: %.1f | Z: %.1f", markedPosition.X, markedPosition.Y, markedPosition.Z)
     else
         tpStatusLabel.Text = "LOCAL NAO MARCADO"
-        tpStatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+        tpStatusLabel.TextColor3 = THEME.bad
         tpCoordLabel.Text = "Nenhuma posicao"
     end
 end
@@ -218,7 +246,6 @@ end
 local function UpdateMarker()
     if tpMarker then tpMarker:Destroy(); tpMarker = nil end
     if not markedPosition then return end
-
     tpMarker = Instance.new("Part")
     tpMarker.Name = "TP_Marker"
     tpMarker.Shape = Enum.PartType.Ball
@@ -229,14 +256,11 @@ local function UpdateMarker()
     tpMarker.CanTouch = false
     tpMarker.CanQuery = false
     tpMarker.Material = Enum.Material.Neon
-    tpMarker.Color = Color3.fromRGB(160, 50, 200)
+    tpMarker.Color = THEME.accent
     tpMarker.Transparency = 0.2
     tpMarker.Parent = workspace
 end
 
--- ============================================================
--- TP SET MARK
--- ============================================================
 local function SetMarkedPosition(position)
     if typeof(position) ~= "Vector3" then return false end
     if position ~= position then return false end
@@ -250,7 +274,7 @@ local function SetMarkedPosition(position)
 end
 
 -- ============================================================
--- TP RAYCAST (USA CÂMERA ATUAL)
+-- TP RAYCAST
 -- ============================================================
 local function GetWorldPositionFromScreenPosition(screenPosition)
     local camera = workspace.CurrentCamera
@@ -267,9 +291,6 @@ local function GetWorldPositionFromScreenPosition(screenPosition)
     return nil
 end
 
--- ============================================================
--- TP INPUT HELPERS
--- ============================================================
 local function GetInputScreenPosition(input)
     if input.UserInputType == Enum.UserInputType.Touch then
         return Vector2.new(input.Position.X, input.Position.Y)
@@ -359,25 +380,19 @@ local function TeleportarSeguro(posicaoDestino)
         tentativas = tentativas + 1
         local colisaoOriginal = root.CanCollide
         root.CanCollide = false
-        local success, err = pcall(function() character:PivotTo(CFrame.new(posicaoDestino)) end)
+        local success = pcall(function() character:PivotTo(CFrame.new(posicaoDestino)) end)
         if success then
             task.wait(0.05)
-            local novaPosicao = root.Position
-            local distancia = (novaPosicao - posicaoDestino).Magnitude
-            if distancia < 5 then sucesso = true; break end
+            if (root.Position - posicaoDestino).Magnitude < 5 then sucesso = true; break end
         end
         if not sucesso then
-            success, err = pcall(function() root.CFrame = CFrame.new(posicaoDestino) end)
+            success = pcall(function() root.CFrame = CFrame.new(posicaoDestino) end)
             if success then
                 task.wait(0.05)
-                local novaPosicao = root.Position
-                local distancia = (novaPosicao - posicaoDestino).Magnitude
-                if distancia < 5 then sucesso = true; break end
+                if (root.Position - posicaoDestino).Magnitude < 5 then sucesso = true; break end
             end
         end
-        if not sucesso then
-            task.wait(0.1)
-        end
+        if not sucesso then task.wait(0.1) end
         root.CanCollide = colisaoOriginal
     end
 
@@ -388,15 +403,11 @@ local function TeleportarSeguro(posicaoDestino)
         root.AssemblyAngularVelocity = Vector3.zero
         pcall(function() root.CFrame = CFrame.new(posicaoDestino) end)
         task.wait(0.1)
-        local novaPosicao = root.Position
-        local distancia = (novaPosicao - posicaoDestino).Magnitude
-        if distancia < 10 then sucesso = true end
+        if (root.Position - posicaoDestino).Magnitude < 10 then sucesso = true end
         if not sucesso then
             pcall(function() character:PivotTo(CFrame.new(posicaoDestino)) end)
             task.wait(0.1)
-            local novaPosicao2 = root.Position
-            local distancia2 = (novaPosicao2 - posicaoDestino).Magnitude
-            if distancia2 < 10 then sucesso = true end
+            if (root.Position - posicaoDestino).Magnitude < 10 then sucesso = true end
         end
     end
 
@@ -404,15 +415,12 @@ local function TeleportarSeguro(posicaoDestino)
 
     if sucesso then
         task.wait(0.05)
-        local posicaoFinal = root.Position
-        local distanciaFinal = (posicaoFinal - posicaoDestino).Magnitude
-        if distanciaFinal < 10 then
+        if (root.Position - posicaoDestino).Magnitude < 10 then
             ShowNotification("TELEPORTADO", true)
-            return true
         else
             ShowNotification("TELEPORTE PARCIAL", false)
-            return true
         end
+        return true
     else
         ShowNotification("FALHA NO TELEPORTE", false)
         return false
@@ -421,18 +429,11 @@ end
 
 local function TeleportToMarkedPosition()
     if not markedPosition then ShowNotification("NENHUM LOCAL MARCADO", false); return false end
-    local sucesso = TeleportarSeguro(markedPosition)
-    if sucesso then
-        ShowNotification("TELEPORTADO", true)
-        return true
-    else
-        ShowNotification("FALHA NO TP", false)
-        return false
-    end
+    return TeleportarSeguro(markedPosition)
 end
 
 -- ============================================================
--- TP INTERAÇÃO (COM DELAY)
+-- TP INTERAÇÃO
 -- ============================================================
 local function ExecuteTPInteracao()
     if tpInteracaoPending then return end
@@ -469,6 +470,261 @@ local function StopTPInteracao()
 end
 
 -- ============================================================
+-- PROXIMY CORE
+-- ============================================================
+local function ProxFindPart(obj)
+    if not obj then return nil end
+    if obj:IsA("BasePart") then return obj end
+    for _, v in ipairs(obj:GetDescendants()) do
+        if v:IsA("BasePart") then return v end
+    end
+    return nil
+end
+
+local function ProxValidPrompt(p)
+    if not p.Enabled then return nil end
+    local part = ProxFindPart(p.Parent)
+    if not part then return nil end
+    if not part:IsDescendantOf(workspace) then return nil end
+    return part
+end
+
+local function ProxGetName(p)
+    if p.ObjectText and p.ObjectText ~= "" then
+        return p.ObjectText
+    elseif p.ActionText and p.ActionText ~= "" then
+        return p.ActionText
+    elseif p.Parent then
+        return p.Parent.Name
+    end
+    return "ProximityPrompt"
+end
+
+local function ProxMatch(p)
+    if #ProxSelectedItems == 0 then return false end
+    local lowerName = string.lower(ProxGetName(p))
+    for _, selected in ipairs(ProxSelectedItems) do
+        if lowerName == string.lower(selected) then return true end
+    end
+    return false
+end
+
+local function ProxInstant(p)
+    local promptId = tostring(p:GetDebugId())
+    if not ProxModified[promptId] then
+        ProxModified[promptId] = {
+            prompt = p,
+            originalHoldDuration = p.HoldDuration,
+            originalRequiresLineOfSight = p.RequiresLineOfSight,
+            originalMaxActivationDistance = p.MaxActivationDistance
+        }
+    end
+    p.HoldDuration = 0
+    p.RequiresLineOfSight = false
+    p.MaxActivationDistance = 999999
+end
+
+local function ProxRestoreAll()
+    for promptId, data in pairs(ProxModified) do
+        local p = data.prompt
+        if p and p.Parent then
+            pcall(function()
+                p.HoldDuration = data.originalHoldDuration
+                p.RequiresLineOfSight = data.originalRequiresLineOfSight
+                p.MaxActivationDistance = data.originalMaxActivationDistance
+            end)
+        end
+    end
+    ProxModified = {}
+end
+
+local function ProxGetDistance(part)
+    local char = LocalPlayer.Character
+    if not char then return math.huge end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return math.huge end
+    return (hrp.Position - part.Position).Magnitude
+end
+
+local function ProxInHistory(id)
+    for _, h in ipairs(ProxTPHistory) do
+        if h == id then return true end
+    end
+    return false
+end
+
+local function ProxAddHistory(id)
+    table.insert(ProxTPHistory, 1, id)
+    if #ProxTPHistory > ProxMaxHistory then
+        table.remove(ProxTPHistory, #ProxTPHistory)
+    end
+end
+
+local function ProxUpdateSelectedLabel()
+    if not proxSelectedLabel then return end
+    if #ProxSelectedItems == 0 then
+        proxSelectedLabel.Text = "Nenhum item selecionado"
+        proxSelectedLabel.TextColor3 = THEME.textSoft
+    else
+        proxSelectedLabel.Text = table.concat(ProxSelectedItems, " • ")
+        proxSelectedLabel.TextColor3 = THEME.accent
+    end
+end
+
+local function ProxToggleItem(itemName)
+    local found = nil
+    for i, s in ipairs(ProxSelectedItems) do
+        if s == itemName then found = i break end
+    end
+    if found then
+        table.remove(ProxSelectedItems, found)
+    else
+        table.insert(ProxSelectedItems, itemName)
+    end
+    ProxUpdateSelectedLabel()
+    local data = ProxItemButtons[itemName]
+    if data then
+        data.button.BackgroundColor3 = found and THEME.card or THEME.accent
+        data.nameLabel.TextColor3 = found and THEME.text or THEME.white
+    end
+    ShowNotification(found and ("REMOVIDO: " .. itemName) or ("SELECIONADO: " .. itemName), not found)
+end
+
+local function ProxCreateItemButton(itemName, count)
+    local btn = Instance.new("TextButton", proxItemScroll)
+    btn.Name = itemName
+    btn.Size = UDim2.new(1, -6, 0, 26)
+    btn.BackgroundColor3 = THEME.card
+    btn.BorderSizePixel = 0
+    btn.Text = ""
+    btn.AutoButtonColor = false
+    btn.ZIndex = 106
+
+    local corner = Instance.new("UICorner", btn)
+    corner.CornerRadius = UDim.new(0, 6)
+
+    local nameLabel = Instance.new("TextLabel", btn)
+    nameLabel.Size = UDim2.new(1, -50, 1, 0)
+    nameLabel.Position = UDim2.new(0, 8, 0, 0)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Text = itemName
+    nameLabel.TextColor3 = THEME.text
+    nameLabel.TextStrokeTransparency = 1
+    nameLabel.Font = Enum.Font.GothamBold
+    nameLabel.TextSize = 9
+    nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+    nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    nameLabel.ZIndex = 107
+
+    local countLabel = Instance.new("TextLabel", btn)
+    countLabel.Size = UDim2.new(0, 36, 0, 16)
+    countLabel.Position = UDim2.new(1, -42, 0.5, -8)
+    countLabel.BackgroundColor3 = THEME.accent2
+    countLabel.Text = tostring(count)
+    countLabel.TextColor3 = THEME.white
+    countLabel.TextStrokeTransparency = 1
+    countLabel.Font = Enum.Font.GothamBold
+    countLabel.TextSize = 9
+    countLabel.ZIndex = 107
+    Instance.new("UICorner", countLabel).CornerRadius = UDim.new(0, 5)
+
+    ProxItemButtons[itemName] = { button = btn, nameLabel = nameLabel, countLabel = countLabel }
+
+    for _, s in ipairs(ProxSelectedItems) do
+        if s == itemName then
+            btn.BackgroundColor3 = THEME.accent
+            nameLabel.TextColor3 = THEME.white
+            break
+        end
+    end
+
+    local lastClick = 0
+    btn.MouseButton1Click:Connect(function()
+        local now = tick()
+        if now - lastClick < 0.25 then return end
+        lastClick = now
+        ProxToggleItem(itemName)
+    end)
+end
+
+local function ProxUpdateItemList(searchTerm)
+    if not proxItemScroll then return end
+    for _, child in ipairs(proxItemScroll:GetChildren()) do
+        if child:IsA("TextButton") then child:Destroy() end
+    end
+    ProxItemButtons = {}
+
+    local sorted = {}
+    for name, count in pairs(ProxItemCounts) do
+        table.insert(sorted, { name = name, count = count })
+    end
+    table.sort(sorted, function(a, b) return a.name < b.name end)
+
+    local shown = 0
+    for _, item in ipairs(sorted) do
+        local pass = true
+        if searchTerm and searchTerm ~= "" then
+            pass = string.find(string.lower(item.name), string.lower(searchTerm), 1, true) ~= nil
+        end
+        if pass then
+            ProxCreateItemButton(item.name, item.count)
+            shown = shown + 1
+        end
+    end
+
+    proxItemScroll.CanvasSize = UDim2.new(0, 0, 0, shown * 28)
+    if proxListTitle then
+        proxListTitle.Text = string.format("ITENS DETECTADOS (%d)", #sorted)
+    end
+end
+
+-- TP ROTATIVO (evita últimos 10)
+local function ProxTeleportRotativo()
+    if #ProxSelectedItems == 0 then
+        ShowNotification("SELECIONE UM ITEM", false)
+        return
+    end
+
+    local targets = {}
+    for _, p in ipairs(workspace:GetDescendants()) do
+        if p:IsA("ProximityPrompt") then
+            local part = ProxValidPrompt(p)
+            if part and ProxMatch(p) then
+                table.insert(targets, {
+                    part = part,
+                    distance = ProxGetDistance(part),
+                    id = tostring(part:GetDebugId())
+                })
+            end
+        end
+    end
+
+    if #targets == 0 then
+        ShowNotification("NENHUM ITEM NO MAPA", false)
+        return
+    end
+
+    table.sort(targets, function(a, b) return a.distance < b.distance end)
+
+    local target = nil
+    for _, t in ipairs(targets) do
+        if not ProxInHistory(t.id) then target = t break end
+    end
+
+    if not target then
+        ProxTPHistory = {}
+        target = targets[1]
+        ShowNotification("HISTORICO RESETADO", true)
+    end
+
+    local char, root = GetCharacterRoot()
+    if not root then ShowNotification("SEM PERSONAGEM", false); return end
+    root.CFrame = target.part.CFrame * CFrame.new(0, 5, 0)
+    ProxAddHistory(target.id)
+    ShowNotification("TP: " .. ProxGetName(target.part:FindFirstChildOfClass("ProximityPrompt") or target.part), true)
+end
+
+-- ============================================================
 -- FREECAM SYSTEM
 -- ============================================================
 local function toV2(pos) return Vector2.new(pos.X, pos.Y) end
@@ -486,10 +742,8 @@ local function moveJoystickInner(posV2)
     if freecamJoystickInner then
         freecamJoystickInner.Position = UDim2.new(0.5, offset.X - sizeInner / 2, 0.5, offset.Y - sizeInner / 2)
     end
-    local dragLevel = math.floor((dist / joystickRadius) * 100)
-    local dir3 = Vector3.new(offset.X / joystickRadius, 0, offset.Y / joystickRadius)
-    _G.JoystickData.DraggingLevel = dragLevel
-    _G.JoystickData.Direction = dir3
+    _G.JoystickData.DraggingLevel = math.floor((dist / joystickRadius) * 100)
+    _G.JoystickData.Direction = Vector3.new(offset.X / joystickRadius, 0, offset.Y / joystickRadius)
 end
 
 local function animateJoystickPress()
@@ -497,7 +751,7 @@ local function animateJoystickPress()
         ts:Create(freecamJoystickOuter, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.fromOffset(sizeOuter * 1.1, sizeOuter * 1.1), BackgroundTransparency = 0.3}):Play()
     end
     if freecamJoystickInner then
-        ts:Create(freecamJoystickInner, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.fromOffset(sizeInner * 1.2, sizeInner * 1.2), BackgroundColor3 = Color3.fromRGB(200, 200, 200)}):Play()
+        ts:Create(freecamJoystickInner, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.fromOffset(sizeInner * 1.2, sizeInner * 1.2), BackgroundColor3 = THEME.accent2}):Play()
     end
 end
 
@@ -506,7 +760,7 @@ local function animateJoystickRelease()
         ts:Create(freecamJoystickOuter, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.fromOffset(sizeOuter, sizeOuter), BackgroundTransparency = 0.5}):Play()
     end
     if freecamJoystickInner then
-        ts:Create(freecamJoystickInner, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.fromOffset(sizeInner, sizeInner), BackgroundColor3 = Color3.fromRGB(255, 255, 255)}):Play()
+        ts:Create(freecamJoystickInner, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = UDim2.fromOffset(sizeInner, sizeInner), BackgroundColor3 = THEME.white}):Play()
     end
 end
 
@@ -523,21 +777,21 @@ local function CreateFreecamJoystick()
     freecamJoystickOuter.Size = UDim2.fromOffset(sizeOuter, sizeOuter)
     freecamJoystickOuter.Position = UDim2.new(0.15, 0, 0.75, 0)
     freecamJoystickOuter.AnchorPoint = Vector2.new(0.5, 0.5)
-    freecamJoystickOuter.BackgroundColor3 = Color3.fromRGB(35, 20, 50)
+    freecamJoystickOuter.BackgroundColor3 = THEME.card
     freecamJoystickOuter.BackgroundTransparency = 0.3
     freecamJoystickOuter.Parent = freecamJoystick
     freecamJoystickOuter.ZIndex = 551
     freecamJoystickOuter.Active = true
     Instance.new("UICorner", freecamJoystickOuter).CornerRadius = UDim.new(1, 0)
     local outerStroke = Instance.new("UIStroke", freecamJoystickOuter)
-    outerStroke.Color = Color3.fromRGB(180, 80, 220)
+    outerStroke.Color = THEME.accent
     outerStroke.Transparency = 0.4
     outerStroke.Thickness = 2
 
     freecamJoystickInner = Instance.new("Frame")
     freecamJoystickInner.Size = UDim2.fromOffset(sizeInner, sizeInner)
     freecamJoystickInner.Position = UDim2.new(0.5, -sizeInner / 2, 0.5, -sizeInner / 2)
-    freecamJoystickInner.BackgroundColor3 = Color3.fromRGB(200, 120, 240)
+    freecamJoystickInner.BackgroundColor3 = THEME.accent2
     freecamJoystickInner.BackgroundTransparency = 0.2
     freecamJoystickInner.Parent = freecamJoystickOuter
     freecamJoystickInner.ZIndex = 552
@@ -586,13 +840,10 @@ local function StartFreecamRender()
         if level > 1 then
             local moveSpeed = (level * 0.02) * speedMultiplier
             local camCF = Camera.CFrame
-            local forward = camCF.LookVector
-            local right = camCF.RightVector
-            local moveDir = (forward * -dir.Z) + (right * dir.X)
+            local moveDir = (camCF.LookVector * -dir.Z) + (camCF.RightVector * dir.X)
             moveDir += Vector3.new(0, dir.Y, 0)
             if moveDir.Magnitude > 0 then
-                moveDir = moveDir.Unit
-                currentPos = currentPos + moveDir * moveSpeed * dt * 60
+                currentPos = currentPos + moveDir.Unit * moveSpeed * dt * 60
             end
         end
         local camLook = Camera.CFrame.LookVector
@@ -604,10 +855,10 @@ end
 local function UpdateFreecamUI()
     if not shortcutFreecamButton then return end
     if FreecamEnabled then
-        shortcutFreecamButton.BackgroundColor3 = Color3.fromRGB(60, 30, 90)
+        shortcutFreecamButton.BackgroundColor3 = THEME.accent
         shortcutFreecamButton.BackgroundTransparency = 0.1
     else
-        shortcutFreecamButton.BackgroundColor3 = Color3.fromRGB(30, 15, 50)
+        shortcutFreecamButton.BackgroundColor3 = THEME.card
         shortcutFreecamButton.BackgroundTransparency = 0.05
     end
     if freecamMinusButton then freecamMinusButton.Visible = FreecamEnabled end
@@ -723,9 +974,7 @@ local function MakeShortcutDraggable(button)
             local delta = input.Position - dragStart
             local maxX = math.max(0, viewport.X - button.AbsoluteSize.X)
             local maxY = math.max(0, viewport.Y - button.AbsoluteSize.Y)
-            local newX = math.clamp(startPos.X.Offset + delta.X, 0, maxX)
-            local newY = math.clamp(startPos.Y.Offset + delta.Y, 0, maxY)
-            button.Position = UDim2.fromOffset(newX, newY)
+            button.Position = UDim2.fromOffset(math.clamp(startPos.X.Offset + delta.X, 0, maxX), math.clamp(startPos.Y.Offset + delta.Y, 0, maxY))
         end
     end)
     UserInputService.InputEnded:Connect(function(input)
@@ -745,99 +994,82 @@ local function CreateNotification()
     NotifFrame.Size = UDim2.new(0, 220, 0, 45)
     NotifFrame.AnchorPoint = Vector2.new(0.5, 0)
     NotifFrame.Position = UDim2.new(0.5, 0, 0, -60)
-    NotifFrame.BackgroundColor3 = Color3.fromRGB(40, 20, 60)
+    NotifFrame.BackgroundColor3 = THEME.bgSoft
     NotifFrame.BackgroundTransparency = 0
     NotifFrame.BorderSizePixel = 0
     NotifFrame.Visible = false
     NotifFrame.ZIndex = 1000
     NotifFrame.Parent = ScreenGui
-    
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 10)
-    corner.Parent = NotifFrame
-    
-    local stroke = Instance.new("UIStroke")
-    stroke.Color = Color3.fromRGB(180, 80, 220)
+
+    Instance.new("UICorner", NotifFrame).CornerRadius = UDim.new(0, 10)
+    local stroke = Instance.new("UIStroke", NotifFrame)
+    stroke.Color = THEME.accent
     stroke.Thickness = 1.5
     stroke.Transparency = 0.2
-    stroke.Parent = NotifFrame
 
-    local grad = Instance.new("UIGradient", NotifFrame)
-    grad.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(60, 25, 90)),
-        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(90, 35, 120)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(60, 25, 90))
-    })
-    grad.Rotation = 90
-
-    NotifIcon = Instance.new("TextLabel")
+    NotifIcon = Instance.new("TextLabel", NotifFrame)
     NotifIcon.Size = UDim2.new(0, 30, 1, 0)
     NotifIcon.Position = UDim2.new(0, 8, 0, 0)
     NotifIcon.BackgroundTransparency = 1
     NotifIcon.Text = ""
-    NotifIcon.TextColor3 = Color3.fromRGB(200, 120, 240)
+    NotifIcon.TextColor3 = THEME.accent
+    NotifIcon.TextStrokeTransparency = 1
     NotifIcon.TextSize = 14
     NotifIcon.Font = Enum.Font.GothamBold
     NotifIcon.ZIndex = 1001
-    NotifIcon.Parent = NotifFrame
-    
-    NotifLabel = Instance.new("TextLabel")
+
+    NotifLabel = Instance.new("TextLabel", NotifFrame)
     NotifLabel.Size = UDim2.new(1, -45, 1, 0)
     NotifLabel.Position = UDim2.new(0, 40, 0, 0)
     NotifLabel.BackgroundTransparency = 1
     NotifLabel.Text = ""
-    NotifLabel.TextColor3 = Color3.fromRGB(240, 235, 245)
+    NotifLabel.TextColor3 = THEME.text
+    NotifLabel.TextStrokeTransparency = 1
     NotifLabel.TextSize = 12
     NotifLabel.Font = Enum.Font.GothamMedium
     NotifLabel.TextXAlignment = Enum.TextXAlignment.Left
     NotifLabel.TextYAlignment = Enum.TextYAlignment.Center
-    NotifLabel.ZIndex = 1001
-    NotifLabel.Parent = NotifFrame
     NotifLabel.TextWrapped = true
+    NotifLabel.ZIndex = 1001
 end
 
-local function ShowNotification(text, enabled)
+ShowNotification = function(text, enabled)
     CreateNotification()
     NotifToken = NotifToken + 1
     local token = NotifToken
-    
+
     if enabled == false then
         NotifIcon.Text = "X"
-        NotifIcon.TextColor3 = Color3.fromRGB(255, 120, 120)
+        NotifIcon.TextColor3 = THEME.bad
     else
         NotifIcon.Text = "OK"
-        NotifIcon.TextColor3 = Color3.fromRGB(120, 255, 160)
+        NotifIcon.TextColor3 = THEME.ok
     end
-    
     NotifLabel.Text = text
-    
+
     NotifFrame.Visible = true
     NotifFrame.Position = UDim2.new(0.5, 0, 0, -60)
     NotifFrame.BackgroundTransparency = 0.8
-    
+
     ts:Create(NotifFrame, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
         Position = UDim2.new(0.5, 0, 0, 10),
         BackgroundTransparency = 0
     }):Play()
-    
+
     task.delay(1.8, function()
         if token ~= NotifToken then return end
-        
         local hide = ts:Create(NotifFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
             Position = UDim2.new(0.5, 0, 0, -60),
             BackgroundTransparency = 0.8
         })
         hide:Play()
-        
         hide.Completed:Connect(function()
-            if token == NotifToken then 
-                NotifFrame.Visible = false 
-            end
+            if token == NotifToken then NotifFrame.Visible = false end
         end)
     end)
 end
 
-local function playPopSound()
+playPopSound = function()
     local sound = Instance.new("Sound")
     sound.SoundId = "rbxassetid://12222203"
     sound.Volume = 0.5
@@ -858,54 +1090,38 @@ end
 
 local function CreateStroke(obj, color, thickness, transparency)
     local s = Instance.new("UIStroke")
-    s.Color = color or Color3.fromRGB(60, 60, 70)
+    s.Color = color or THEME.stroke
     s.Thickness = thickness or 1
     s.Transparency = transparency or 0
     s.Parent = obj
     return s
 end
 
-local function AnimateButton(btn, props, time)
-    ts:Create(btn, TweenInfo.new(time or 0.15), props):Play()
-end
-
 local function CreateSectionLabel(parent, text)
     local container = Instance.new("Frame", parent)
     container.Size = UDim2.new(0.9, 0, 0, 14)
-    container.BackgroundColor3 = Color3.fromRGB(45, 25, 70)
-    container.BackgroundTransparency = 0
+    container.BackgroundColor3 = THEME.card
+    container.BorderSizePixel = 0
     CreateCorner(container, 4)
-    
-    local grad = Instance.new("UIGradient", container)
-    grad.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(60, 30, 90)),
-        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(90, 40, 120)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(60, 30, 90))
-    })
-    grad.Rotation = 90
-    
-    local stroke = Instance.new("UIStroke", container)
-    stroke.Color = Color3.fromRGB(150, 70, 200)
-    stroke.Thickness = 1
-    stroke.Transparency = 0.3
-    
+
     local indicator = Instance.new("Frame", container)
     indicator.Size = UDim2.new(0, 2, 0, 10)
     indicator.Position = UDim2.new(0, 4, 0.5, -5)
-    indicator.BackgroundColor3 = Color3.fromRGB(200, 100, 240)
+    indicator.BackgroundColor3 = THEME.accent
     indicator.BorderSizePixel = 0
     CreateCorner(indicator, 1)
-    
+
     local label = Instance.new("TextLabel", container)
     label.Size = UDim2.new(1, -10, 1, 0)
     label.Position = UDim2.new(0, 8, 0, 0)
     label.BackgroundTransparency = 1
     label.Text = text
-    label.TextColor3 = Color3.fromRGB(220, 180, 240)
+    label.TextColor3 = THEME.text
+    label.TextStrokeTransparency = 1
     label.TextSize = 8
     label.Font = Enum.Font.GothamBold
     label.TextXAlignment = Enum.TextXAlignment.Left
-    
+
     return container
 end
 
@@ -913,7 +1129,12 @@ end
 -- UI CREATION
 -- ============================================================
 for _, v in pairs(game.CoreGui:GetChildren()) do if v.Name == "PRIDE_HUB" then v:Destroy() end end
-ScreenGui = Instance.new("ScreenGui", game.CoreGui); ScreenGui.Name = "PRIDE_HUB"; ScreenGui.IgnoreGuiInset = true
+ScreenGui = Instance.new("ScreenGui", game.CoreGui)
+ScreenGui.Name = "PRIDE_HUB"
+ScreenGui.IgnoreGuiInset = true
+
+ProxFolder = Instance.new("Folder", ScreenGui)
+ProxFolder.Name = "PROX_ESP"
 
 local FOV_Ring = Instance.new("Frame", ScreenGui)
 FOV_Ring.BackgroundTransparency = 1
@@ -931,55 +1152,35 @@ fovStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 local Main = Instance.new("Frame", ScreenGui)
 Main.Size = UDim2.new(0, 200, 0, 290)
 Main.Position = UDim2.new(0.5, -100, 0.5, -145)
-Main.BackgroundColor3 = Color3.fromRGB(25, 12, 40)
-Main.BackgroundTransparency = 0
+Main.BackgroundColor3 = THEME.bg
+Main.BorderSizePixel = 0
 Main.Active = true
 Main.Draggable = true
 Main.ClipsDescendants = true
 CreateCorner(Main, 10)
-
-local mainGrad = Instance.new("UIGradient", Main)
-mainGrad.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(30, 10, 50)),
-    ColorSequenceKeypoint.new(0.25, Color3.fromRGB(40, 15, 65)),
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(50, 20, 75)),
-    ColorSequenceKeypoint.new(0.75, Color3.fromRGB(40, 15, 65)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(30, 10, 50))
-})
-mainGrad.Rotation = 45
-
-local mainStroke = Instance.new("UIStroke", Main)
-mainStroke.Color = Color3.fromRGB(180, 80, 220)
-mainStroke.Thickness = 2
-mainStroke.Transparency = 0.2
+CreateStroke(Main, THEME.accent, 2, 0.2)
 
 local hd = Instance.new("Frame", Main)
 hd.Size = UDim2.new(1, 0, 0, 36)
-hd.BackgroundColor3 = Color3.fromRGB(50, 20, 75)
-hd.BackgroundTransparency = 0
+hd.BackgroundColor3 = THEME.accent
 hd.BorderSizePixel = 0
 CreateCorner(hd, 10)
 
 local hdGrad = Instance.new("UIGradient", hd)
 hdGrad.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(70, 30, 100)),
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(120, 40, 140)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(70, 30, 100))
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(170, 110, 245)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(140, 80, 225)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(170, 110, 245))
 })
 hdGrad.Rotation = 90
-
-local hdLine = Instance.new("Frame", hd)
-hdLine.Size = UDim2.new(1, 0, 0, 1)
-hdLine.Position = UDim2.new(0, 0, 1, -1)
-hdLine.BackgroundColor3 = Color3.fromRGB(200, 80, 240)
-hdLine.BorderSizePixel = 0
 
 local tt = Instance.new("TextLabel", hd)
 tt.Size = UDim2.new(1, -60, 0, 20)
 tt.Position = UDim2.new(0, 12, 0, 3)
 tt.BackgroundTransparency = 1
 tt.Text = "PRIDE HUB"
-tt.TextColor3 = Color3.fromRGB(255, 255, 255)
+tt.TextColor3 = THEME.white
+tt.TextStrokeTransparency = 1
 tt.TextSize = 12
 tt.Font = Enum.Font.GothamBold
 tt.TextXAlignment = Enum.TextXAlignment.Left
@@ -988,8 +1189,9 @@ local st = Instance.new("TextLabel", hd)
 st.Size = UDim2.new(1, -60, 0, 10)
 st.Position = UDim2.new(0, 12, 0, 22)
 st.BackgroundTransparency = 1
-st.Text = "AIM | ESP | TP | ATALHO"
-st.TextColor3 = Color3.fromRGB(220, 180, 240)
+st.Text = "AIM | ESP | TP | ATALHO | PROX"
+st.TextColor3 = Color3.fromRGB(235, 220, 255)
+st.TextStrokeTransparency = 1
 st.TextSize = 7
 st.Font = Enum.Font.GothamMedium
 st.TextXAlignment = Enum.TextXAlignment.Left
@@ -997,40 +1199,40 @@ st.TextXAlignment = Enum.TextXAlignment.Left
 local btnMin = Instance.new("TextButton", hd)
 btnMin.Size = UDim2.new(0, 20, 0, 20)
 btnMin.Position = UDim2.new(1, -44, 0.5, -10)
-btnMin.BackgroundColor3 = Color3.fromRGB(80, 40, 110)
-btnMin.BackgroundTransparency = 0.1
+btnMin.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+btnMin.BackgroundTransparency = 0.75
 btnMin.Text = "-"
-btnMin.TextColor3 = Color3.new(1, 1, 1)
+btnMin.TextColor3 = THEME.white
+btnMin.TextStrokeTransparency = 1
 btnMin.TextSize = 13
 btnMin.Font = Enum.Font.GothamMedium
 btnMin.AutoButtonColor = false
 CreateCorner(btnMin, 6)
-CreateStroke(btnMin, Color3.fromRGB(180, 80, 220), 1, 0.3)
 
 local CloseBtn = Instance.new("TextButton", hd)
 CloseBtn.Size = UDim2.new(0, 20, 0, 20)
 CloseBtn.Position = UDim2.new(1, -22, 0.5, -10)
-CloseBtn.BackgroundColor3 = Color3.fromRGB(80, 40, 110)
-CloseBtn.BackgroundTransparency = 0.1
+CloseBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+CloseBtn.BackgroundTransparency = 0.75
 CloseBtn.Text = "x"
-CloseBtn.TextColor3 = Color3.new(1, 1, 1)
+CloseBtn.TextColor3 = THEME.white
+CloseBtn.TextStrokeTransparency = 1
 CloseBtn.TextSize = 13
 CloseBtn.Font = Enum.Font.GothamMedium
 CloseBtn.AutoButtonColor = false
 CreateCorner(CloseBtn, 6)
-CreateStroke(CloseBtn, Color3.fromRGB(180, 80, 220), 1, 0.3)
 
 local Icon = Instance.new("ImageButton", ScreenGui)
 Icon.Size = UDim2.new(0, 38, 0, 38)
 Icon.Position = UDim2.new(0, 10, 0, 100)
 Icon.Image = "rbxassetid://73630975144333"
 Icon.ImageTransparency = 0.05
-Icon.BackgroundColor3 = Color3.fromRGB(80, 40, 110)
+Icon.BackgroundColor3 = THEME.accent
 Icon.BackgroundTransparency = 0.1
 Icon.Visible = false
 Icon.ZIndex = 10
 CreateCorner(Icon, 10)
-CreateStroke(Icon, Color3.fromRGB(180, 80, 220), 2, 0.3)
+CreateStroke(Icon, THEME.accent, 2, 0.3)
 
 local minimizado = true
 
@@ -1060,6 +1262,8 @@ end)
 
 CloseBtn.MouseButton1Click:Connect(function()
     CancelDedoSelection()
+    ProxRestoreAll()
+    if ProxFolder then ProxFolder:ClearAllChildren() end
     Main.Visible = false
     Icon.Visible = false
 end)
@@ -1072,22 +1276,22 @@ local dragStart = nil
 local startPos = nil
 
 local function MakeDraggable(obj)
-    local dragging, dragStart, startPos
+    local d, ds, sp
     obj.InputBegan:Connect(function(input)
         if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and not IsDraggingSlider then
-            dragging = true
-            dragStart = input.Position
-            startPos = obj.Position
+            d = true
+            ds = input.Position
+            sp = obj.Position
         end
     end)
     UserInputService.InputChanged:Connect(function(input)
-        if dragging then
+        if d then
             local viewport = Camera.ViewportSize
-            local delta = input.Position - dragStart
-            obj.Position = UDim2.new(0, math.clamp(startPos.X.Offset + delta.X, 0, math.max(0, viewport.X - obj.AbsoluteSize.X)), 0, math.clamp(startPos.Y.Offset + delta.Y, 0, math.max(0, viewport.Y - obj.AbsoluteSize.Y)))
+            local delta = input.Position - ds
+            obj.Position = UDim2.new(0, math.clamp(sp.X.Offset + delta.X, 0, math.max(0, viewport.X - obj.AbsoluteSize.X)), 0, math.clamp(sp.Y.Offset + delta.Y, 0, math.max(0, viewport.Y - obj.AbsoluteSize.Y)))
         end
     end)
-    UserInputService.InputEnded:Connect(function() dragging = false end)
+    UserInputService.InputEnded:Connect(function() d = false end)
 end
 MakeDraggable(Main)
 
@@ -1111,162 +1315,77 @@ UserInputService.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = false end
 end)
 
+-- ============================================================
+-- BARRA DE ABAS (5 ABAS)
+-- ============================================================
 local barraAbas = Instance.new("Frame", Main)
 barraAbas.Size = UDim2.new(1, 0, 0, 26)
 barraAbas.Position = UDim2.new(0, 0, 0, 36)
-barraAbas.BackgroundColor3 = Color3.fromRGB(25, 12, 40)
-barraAbas.BackgroundTransparency = 0
+barraAbas.BackgroundColor3 = THEME.bg
 barraAbas.BorderSizePixel = 0
 
-local abaAIM = Instance.new("TextButton", barraAbas)
-abaAIM.Size = UDim2.new(0.24, 0, 0, 22)
-abaAIM.Position = UDim2.new(0.005, 0, 0, 2)
-abaAIM.BackgroundColor3 = Color3.fromRGB(90, 40, 130)
-abaAIM.BackgroundTransparency = 0.1
-abaAIM.Text = "AIM"
-abaAIM.TextColor3 = Color3.fromRGB(255, 255, 255)
-abaAIM.TextSize = 8
-abaAIM.Font = Enum.Font.GothamBold
-abaAIM.AutoButtonColor = false
-CreateCorner(abaAIM, 6)
-CreateStroke(abaAIM, Color3.fromRGB(200, 80, 240), 1, 0.3)
+local function CriarAba(texto, posX, ordem)
+    local aba = Instance.new("TextButton", barraAbas)
+    aba.Size = UDim2.new(0.19, 0, 0, 22)
+    aba.Position = UDim2.new(posX, 0, 0, 2)
+    aba.BackgroundColor3 = THEME.card
+    aba.Text = texto
+    aba.TextColor3 = THEME.textSoft
+    aba.TextStrokeTransparency = 1
+    aba.TextSize = 7
+    aba.Font = Enum.Font.GothamBold
+    aba.AutoButtonColor = false
+    aba.LayoutOrder = ordem
+    CreateCorner(aba, 6)
+    return aba
+end
 
-local abaESP = Instance.new("TextButton", barraAbas)
-abaESP.Size = UDim2.new(0.24, 0, 0, 22)
-abaESP.Position = UDim2.new(0.255, 0, 0, 2)
-abaESP.BackgroundColor3 = Color3.fromRGB(50, 25, 75)
-abaESP.BackgroundTransparency = 0.1
-abaESP.Text = "ESP"
-abaESP.TextColor3 = Color3.fromRGB(200, 190, 210)
-abaESP.TextSize = 8
-abaESP.Font = Enum.Font.GothamBold
-abaESP.AutoButtonColor = false
-CreateCorner(abaESP, 6)
-CreateStroke(abaESP, Color3.fromRGB(130, 70, 180), 1, 0.4)
-
-local abaTP = Instance.new("TextButton", barraAbas)
-abaTP.Size = UDim2.new(0.24, 0, 0, 22)
-abaTP.Position = UDim2.new(0.505, 0, 0, 2)
-abaTP.BackgroundColor3 = Color3.fromRGB(50, 25, 75)
-abaTP.BackgroundTransparency = 0.1
-abaTP.Text = "TP"
-abaTP.TextColor3 = Color3.fromRGB(200, 190, 210)
-abaTP.TextSize = 8
-abaTP.Font = Enum.Font.GothamBold
-abaTP.AutoButtonColor = false
-CreateCorner(abaTP, 6)
-CreateStroke(abaTP, Color3.fromRGB(130, 70, 180), 1, 0.4)
-
-local abaAtalho = Instance.new("TextButton", barraAbas)
-abaAtalho.Size = UDim2.new(0.24, 0, 0, 22)
-abaAtalho.Position = UDim2.new(0.755, 0, 0, 2)
-abaAtalho.BackgroundColor3 = Color3.fromRGB(50, 25, 75)
-abaAtalho.BackgroundTransparency = 0.1
-abaAtalho.Text = "ATALHO"
-abaAtalho.TextColor3 = Color3.fromRGB(200, 190, 210)
-abaAtalho.TextSize = 7
-abaAtalho.Font = Enum.Font.GothamBold
-abaAtalho.AutoButtonColor = false
-CreateCorner(abaAtalho, 6)
-CreateStroke(abaAtalho, Color3.fromRGB(130, 70, 180), 1, 0.4)
+local abaAIM    = CriarAba("AIM",     0.005, 1)
+local abaESP    = CriarAba("ESP",     0.205, 2)
+local abaTP     = CriarAba("TP",      0.405, 3)
+local abaAtalho = CriarAba("ATALHO",  0.605, 4)
+local abaProx   = CriarAba("PROX",    0.805, 5)
 
 local abaIndicator = Instance.new("Frame", barraAbas)
 abaIndicator.Size = UDim2.new(0, 18, 0, 2)
 abaIndicator.Position = UDim2.new(0.005, 0, 1, -1)
-abaIndicator.BackgroundColor3 = Color3.fromRGB(200, 80, 240)
+abaIndicator.BackgroundColor3 = THEME.accent
 abaIndicator.BorderSizePixel = 0
 CreateCorner(abaIndicator, 1)
 
 local contentY = 62
 local contentH = 228
 
-local telaAIM = Instance.new("ScrollingFrame", Main)
-telaAIM.Size = UDim2.new(1, 0, 0, contentH)
-telaAIM.Position = UDim2.new(0, 0, 0, contentY)
-telaAIM.BackgroundColor3 = Color3.fromRGB(25, 12, 40)
-telaAIM.BackgroundTransparency = 0
-telaAIM.ScrollBarThickness = 2
-telaAIM.ScrollBarImageColor3 = Color3.fromRGB(180, 80, 220)
-telaAIM.BorderSizePixel = 0
+local function CriarTela()
+    local tela = Instance.new("ScrollingFrame", Main)
+    tela.Size = UDim2.new(1, 0, 0, contentH)
+    tela.Position = UDim2.new(0, 0, 0, contentY)
+    tela.BackgroundColor3 = THEME.bg
+    tela.BorderSizePixel = 0
+    tela.ScrollBarThickness = 2
+    tela.ScrollBarImageColor3 = THEME.accent
+    tela.Visible = false
+    tela.CanvasSize = UDim2.new(0, 0, 0, 0)
+    tela.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    tela.ElasticBehavior = Enum.ElasticBehavior.Always
+    local lay = Instance.new("UIListLayout", tela)
+    lay.Padding = UDim.new(0, 4)
+    lay.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    lay.SortOrder = Enum.SortOrder.LayoutOrder
+    local pad = Instance.new("UIPadding", tela)
+    pad.PaddingTop = UDim.new(0, 6)
+    pad.PaddingBottom = UDim.new(0, 6)
+    pad.PaddingLeft = UDim.new(0, 5)
+    pad.PaddingRight = UDim.new(0, 5)
+    return tela
+end
+
+local telaAIM = CriarTela()
+local telaESP = CriarTela()
+local telaTP = CriarTela()
+local telaAtalho = CriarTela()
+local telaProx = CriarTela()
 telaAIM.Visible = true
-telaAIM.CanvasSize = UDim2.new(0, 0, 0, 0)
-telaAIM.AutomaticCanvasSize = Enum.AutomaticSize.Y
-telaAIM.ElasticBehavior = Enum.ElasticBehavior.Always
-local layAIM = Instance.new("UIListLayout", telaAIM)
-layAIM.Padding = UDim.new(0, 4)
-layAIM.HorizontalAlignment = Enum.HorizontalAlignment.Center
-layAIM.SortOrder = Enum.SortOrder.LayoutOrder
-local padAIM = Instance.new("UIPadding", telaAIM)
-padAIM.PaddingTop = UDim.new(0, 6)
-padAIM.PaddingBottom = UDim.new(0, 6)
-padAIM.PaddingLeft = UDim.new(0, 5)
-padAIM.PaddingRight = UDim.new(0, 5)
-
-local telaESP = Instance.new("ScrollingFrame", Main)
-telaESP.Size = UDim2.new(1, 0, 0, contentH)
-telaESP.Position = UDim2.new(0, 0, 0, contentY)
-telaESP.BackgroundColor3 = Color3.fromRGB(25, 12, 40)
-telaESP.BackgroundTransparency = 0
-telaESP.ScrollBarThickness = 2
-telaESP.ScrollBarImageColor3 = Color3.fromRGB(180, 80, 220)
-telaESP.BorderSizePixel = 0
-telaESP.Visible = false
-telaESP.CanvasSize = UDim2.new(0, 0, 0, 0)
-telaESP.AutomaticCanvasSize = Enum.AutomaticSize.Y
-telaESP.ElasticBehavior = Enum.ElasticBehavior.Always
-local layESP = Instance.new("UIListLayout", telaESP)
-layESP.Padding = UDim.new(0, 4)
-layESP.HorizontalAlignment = Enum.HorizontalAlignment.Center
-layESP.SortOrder = Enum.SortOrder.LayoutOrder
-local padESP = Instance.new("UIPadding", telaESP)
-padESP.PaddingTop = UDim.new(0, 6)
-padESP.PaddingBottom = UDim.new(0, 6)
-padESP.PaddingLeft = UDim.new(0, 5)
-padESP.PaddingRight = UDim.new(0, 5)
-
-local telaTP = Instance.new("ScrollingFrame", Main)
-telaTP.Size = UDim2.new(1, 0, 0, contentH)
-telaTP.Position = UDim2.new(0, 0, 0, contentY)
-telaTP.BackgroundColor3 = Color3.fromRGB(25, 12, 40)
-telaTP.BackgroundTransparency = 0
-telaTP.ScrollBarThickness = 2
-telaTP.ScrollBarImageColor3 = Color3.fromRGB(180, 80, 220)
-telaTP.BorderSizePixel = 0
-telaTP.Visible = false
-telaTP.CanvasSize = UDim2.new(0, 0, 0, 0)
-telaTP.AutomaticCanvasSize = Enum.AutomaticSize.Y
-telaTP.ElasticBehavior = Enum.ElasticBehavior.Always
-local layTP = Instance.new("UIListLayout", telaTP)
-layTP.Padding = UDim.new(0, 8)
-layTP.HorizontalAlignment = Enum.HorizontalAlignment.Center
-layTP.SortOrder = Enum.SortOrder.LayoutOrder
-local padTP = Instance.new("UIPadding", telaTP)
-padTP.PaddingTop = UDim.new(0, 10)
-padTP.PaddingBottom = UDim.new(0, 10)
-padTP.PaddingLeft = UDim.new(0, 8)
-padTP.PaddingRight = UDim.new(0, 8)
-
-local telaAtalho = Instance.new("ScrollingFrame", Main)
-telaAtalho.Size = UDim2.new(1, 0, 0, contentH)
-telaAtalho.Position = UDim2.new(0, 0, 0, contentY)
-telaAtalho.BackgroundColor3 = Color3.fromRGB(25, 12, 40)
-telaAtalho.BackgroundTransparency = 0
-telaAtalho.ScrollBarThickness = 2
-telaAtalho.ScrollBarImageColor3 = Color3.fromRGB(180, 80, 220)
-telaAtalho.BorderSizePixel = 0
-telaAtalho.Visible = false
-telaAtalho.CanvasSize = UDim2.new(0, 0, 0, 0)
-telaAtalho.AutomaticCanvasSize = Enum.AutomaticSize.Y
-telaAtalho.ElasticBehavior = Enum.ElasticBehavior.Always
-local layAtalho = Instance.new("UIListLayout", telaAtalho)
-layAtalho.Padding = UDim.new(0, 8)
-layAtalho.HorizontalAlignment = Enum.HorizontalAlignment.Center
-layAtalho.SortOrder = Enum.SortOrder.LayoutOrder
-local padAtalho = Instance.new("UIPadding", telaAtalho)
-padAtalho.PaddingTop = UDim.new(0, 10)
-padAtalho.PaddingBottom = UDim.new(0, 10)
-padAtalho.PaddingLeft = UDim.new(0, 8)
-padAtalho.PaddingRight = UDim.new(0, 8)
 
 -- ============================================================
 -- COMPONENTES UI
@@ -1276,11 +1395,10 @@ local selectedColorBtn = nil
 local function criarSeletorCores(parent, callback)
     local frame = Instance.new("Frame", parent)
     frame.Size = UDim2.new(0.9, 0, 0, 42)
-    frame.BackgroundColor3 = Color3.fromRGB(45, 25, 70)
-    frame.BackgroundTransparency = 0
+    frame.BackgroundColor3 = THEME.card
     frame.LayoutOrder = 99
+    frame.BorderSizePixel = 0
     CreateCorner(frame, 7)
-    CreateStroke(frame, Color3.fromRGB(130, 70, 180), 1, 0.3)
     local grid = Instance.new("UIGridLayout", frame)
     grid.CellSize = UDim2.new(0, 26, 0, 18)
     grid.CellPadding = UDim2.new(0, 3, 0, 3)
@@ -1293,64 +1411,64 @@ local function criarSeletorCores(parent, callback)
         bt.Text = ""
         bt.AutoButtonColor = false
         CreateCorner(bt, 4)
-        CreateStroke(bt, Color3.fromRGB(180, 80, 220), 1, 0.3)
+        CreateStroke(bt, THEME.stroke, 1, 0.3)
         bt.MouseButton1Click:Connect(function()
-            if selectedColorBtn then
-                if selectedColorBtn:FindFirstChild("UIStroke2") then selectedColorBtn:FindFirstChild("UIStroke2"):Destroy() end
+            if selectedColorBtn and selectedColorBtn:FindFirstChild("UIStroke2") then
+                selectedColorBtn:FindFirstChild("UIStroke2"):Destroy()
             end
             selectedColorBtn = bt
             local sel = Instance.new("UIStroke", bt)
             sel.Name = "UIStroke2"
             sel.Color = Color3.new(1, 1, 1)
             sel.Thickness = 2
-            sel.Transparency = 0
             callback(c)
         end)
     end
     return frame
 end
 
+local sairAimInput = nil
+local sairAimContadorLabel = nil
+
 local function AddToggleVertical(name, prop, parent)
     local btn = Instance.new("TextButton", parent)
     btn.Size = UDim2.new(0.9, 0, 0, 32)
-    btn.BackgroundColor3 = Color3.fromRGB(45, 25, 70)
-    btn.BackgroundTransparency = 0
+    btn.BackgroundColor3 = THEME.card
     btn.Text = ""
     btn.AutoButtonColor = false
     btn.BorderSizePixel = 0
     CreateCorner(btn, 7)
-    CreateStroke(btn, Color3.fromRGB(130, 70, 180), 1, 0.3)
-    
+
     local label = Instance.new("TextLabel", btn)
     label.Size = UDim2.new(0.55, 0, 1, 0)
     label.Position = UDim2.new(0, 9, 0, 0)
     label.BackgroundTransparency = 1
     label.Text = name
-    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.TextColor3 = THEME.text
+    label.TextStrokeTransparency = 1
     label.TextSize = 8
     label.Font = Enum.Font.GothamBold
     label.TextXAlignment = Enum.TextXAlignment.Left
-    
+
     local toggleDot = Instance.new("Frame", btn)
     toggleDot.Size = UDim2.new(0, 30, 0, 16)
     toggleDot.Position = UDim2.new(1, -38, 0.5, -8)
-    toggleDot.BackgroundColor3 = Color3.fromRGB(60, 35, 85)
+    toggleDot.BackgroundColor3 = Color3.fromRGB(210, 200, 230)
     toggleDot.BorderSizePixel = 0
     CreateCorner(toggleDot, 8)
-    CreateStroke(toggleDot, Color3.fromRGB(150, 70, 200), 1, 0.3)
-    
+
     local dot = Instance.new("Frame", toggleDot)
     dot.Size = UDim2.new(0, 12, 0, 12)
     dot.Position = UDim2.new(0, 2, 0.5, -6)
-    dot.BackgroundColor3 = Color3.fromRGB(160, 130, 180)
+    dot.BackgroundColor3 = Color3.fromRGB(170, 155, 195)
     dot.BorderSizePixel = 0
     CreateCorner(dot, 6)
-    
+
     local function updateToggle(showNotif)
         local on = getgenv().Config[prop]
-        ts:Create(dot, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = UDim2.new(0, on and 16 or 2, 0.5, -6), BackgroundColor3 = on and Color3.fromRGB(220, 100, 255) or Color3.fromRGB(160, 130, 180)}):Play()
-        ts:Create(toggleDot, TweenInfo.new(0.15), {BackgroundColor3 = on and Color3.fromRGB(80, 40, 110) or Color3.fromRGB(60, 35, 85)}):Play()
-        ts:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = on and Color3.fromRGB(65, 35, 95) or Color3.fromRGB(45, 25, 70)}):Play()
+        ts:Create(dot, TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = UDim2.new(0, on and 16 or 2, 0.5, -6), BackgroundColor3 = on and THEME.white or Color3.fromRGB(170, 155, 195)}):Play()
+        ts:Create(toggleDot, TweenInfo.new(0.15), {BackgroundColor3 = on and THEME.accent or Color3.fromRGB(210, 200, 230)}):Play()
+        ts:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = on and THEME.cardHover or THEME.card}):Play()
         if showNotif then
             if prop == "ButtonTP" then
                 ShowNotification(on and "ATALHO TP ATIVADO" or "ATALHO TP DESATIVADO", on)
@@ -1367,6 +1485,7 @@ local function AddToggleVertical(name, prop, parent)
     btn.MouseButton1Click:Connect(function()
         getgenv().Config[prop] = not getgenv().Config[prop]
         updateToggle(true)
+
         if prop == "SairAimEnabled" then
             if getgenv().Config[prop] then
                 SairAim.Enabled = true
@@ -1395,6 +1514,18 @@ local function AddToggleVertical(name, prop, parent)
             if not getgenv().Config.ButtonFreecam and FreecamEnabled then DisableFreecam() end
         end
         if prop == "ButtonTP" or prop == "ButtonFreecam" then UpdateShortcutVisibility() end
+        if prop == "ProxInstant" then
+            if getgenv().Config.ProxInstant then
+                for _, p in ipairs(workspace:GetDescendants()) do
+                    if p:IsA("ProximityPrompt") then ProxInstant(p) end
+                end
+            else
+                ProxRestoreAll()
+            end
+        end
+        if prop == "ProxAutoFarm" then
+            if getgenv().Config.ProxAutoFarm then ProxInteracted = {} end
+        end
     end)
     return btn
 end
@@ -1404,54 +1535,46 @@ local function AddSliderVertical(name, prop, parent, max, min, suffix)
     suffix = suffix or ""
     local frame = Instance.new("Frame", parent)
     frame.Size = UDim2.new(0.9, 0, 0, 35)
-    frame.BackgroundColor3 = Color3.fromRGB(40, 22, 65)
-    frame.BackgroundTransparency = 0
+    frame.BackgroundColor3 = THEME.card
     frame.BorderSizePixel = 0
     CreateCorner(frame, 7)
-    CreateStroke(frame, Color3.fromRGB(130, 70, 180), 1, 0.3)
-    
+
     local label = Instance.new("TextLabel", frame)
     label.Size = UDim2.new(0.5, 0, 0, 15)
     label.Position = UDim2.new(0, 7, 0, 2)
     label.BackgroundTransparency = 1
     label.Text = name
-    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.TextColor3 = THEME.text
+    label.TextStrokeTransparency = 1
     label.TextSize = 7
     label.Font = Enum.Font.GothamBold
     label.TextXAlignment = Enum.TextXAlignment.Left
-    
+
     local valueLabel = Instance.new("TextLabel", frame)
     valueLabel.Size = UDim2.new(0.4, 0, 0, 15)
     valueLabel.Position = UDim2.new(0.6, 0, 0, 2)
     valueLabel.BackgroundTransparency = 1
     valueLabel.Text = getgenv().Config[prop] .. suffix
-    valueLabel.TextColor3 = Color3.fromRGB(220, 140, 250)
+    valueLabel.TextColor3 = THEME.accent
+    valueLabel.TextStrokeTransparency = 1
     valueLabel.TextSize = 8
     valueLabel.Font = Enum.Font.GothamBold
     valueLabel.TextXAlignment = Enum.TextXAlignment.Right
-    
+
     local barBg = Instance.new("Frame", frame)
     barBg.Size = UDim2.new(0.9, 0, 0, 6)
     barBg.Position = UDim2.new(0.05, 0, 0, 20)
-    barBg.BackgroundColor3 = Color3.fromRGB(60, 35, 85)
+    barBg.BackgroundColor3 = Color3.fromRGB(210, 200, 230)
     barBg.BorderSizePixel = 0
     CreateCorner(barBg, 3)
-    
+
     local barFill = Instance.new("Frame", barBg)
     local percent = (getgenv().Config[prop] - min) / (max - min)
     barFill.Size = UDim2.new(percent, 0, 1, 0)
-    barFill.BackgroundColor3 = Color3.fromRGB(200, 80, 240)
+    barFill.BackgroundColor3 = THEME.accent
     barFill.BorderSizePixel = 0
     CreateCorner(barFill, 3)
-    
-    local fillGrad = Instance.new("UIGradient", barFill)
-    fillGrad.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(160, 40, 200)),
-        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(230, 100, 255)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(160, 40, 200))
-    })
-    fillGrad.Rotation = 90
-    
+
     local dot = Instance.new("TextButton", barBg)
     dot.Size = UDim2.new(0, 14, 0, 14)
     dot.Position = UDim2.new(percent, -7, 0.5, -7)
@@ -1459,8 +1582,8 @@ local function AddSliderVertical(name, prop, parent, max, min, suffix)
     dot.Text = ""
     dot.AutoButtonColor = false
     CreateCorner(dot, 7)
-    CreateStroke(dot, Color3.fromRGB(200, 80, 240), 2, 0)
-    
+    CreateStroke(dot, THEME.accent, 2, 0)
+
     local sliderConn = nil
     local function updateSlider(input)
         local p = math.clamp((input.Position.X - barBg.AbsolutePosition.X) / barBg.AbsoluteSize.X, 0, 1)
@@ -1473,16 +1596,16 @@ local function AddSliderVertical(name, prop, parent, max, min, suffix)
     barBg.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             IsDraggingSlider = true
-            sliderConn = UserInputService.InputChanged:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then updateSlider(input) end
+            sliderConn = UserInputService.InputChanged:Connect(function(inp)
+                if inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch then updateSlider(inp) end
             end)
             updateSlider(input)
         end
     end)
     dot.MouseButton1Down:Connect(function()
         IsDraggingSlider = true
-        sliderConn = UserInputService.InputChanged:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then updateSlider(input) end
+        sliderConn = UserInputService.InputChanged:Connect(function(inp)
+            if inp.UserInputType == Enum.UserInputType.MouseMovement or inp.UserInputType == Enum.UserInputType.Touch then updateSlider(inp) end
         end)
     end)
     UserInputService.InputEnded:Connect(function(input)
@@ -1497,9 +1620,6 @@ end
 -- ============================================================
 -- SAIR AIM
 -- ============================================================
-local sairAimInput = nil
-local sairAimContadorLabel = nil
-
 local function ExecutarSaidaAim()
     if not SairAim.Enabled then return end
     if SairAim.Processing then return end
@@ -1528,8 +1648,7 @@ local function ProcessarSairAim(Target)
         SairAim.LossStart = os.clock()
         return
     end
-    local tempoPerdido = os.clock() - SairAim.LossStart
-    if tempoPerdido >= SairAimLossConfirmTime then
+    if (os.clock() - SairAim.LossStart) >= SairAimLossConfirmTime then
         ExecutarSaidaAim()
         SairAim.LosingTarget = false
         SairAim.LossStart = 0
@@ -1551,15 +1670,15 @@ AddSliderVertical("RAIO FOV", "Radius", telaAIM, 600)
 CreateSectionLabel(telaAIM, "ALVO")
 local PartBtn = Instance.new("TextButton", telaAIM)
 PartBtn.Size = UDim2.new(0.9, 0, 0, 28)
-PartBtn.BackgroundColor3 = Color3.fromRGB(45, 25, 70)
-PartBtn.BackgroundTransparency = 0
+PartBtn.BackgroundColor3 = THEME.card
 PartBtn.Text = "ALVO: CABECA"
-PartBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+PartBtn.TextColor3 = THEME.text
+PartBtn.TextStrokeTransparency = 1
 PartBtn.TextSize = 8
 PartBtn.Font = Enum.Font.GothamBold
 PartBtn.AutoButtonColor = false
+PartBtn.BorderSizePixel = 0
 CreateCorner(PartBtn, 7)
-CreateStroke(PartBtn, Color3.fromRGB(180, 80, 220), 1, 0.3)
 PartBtn.MouseButton1Click:Connect(function()
     getgenv().Config.TargetPart = (getgenv().Config.TargetPart == "Head" and "HumanoidRootPart" or "Head")
     PartBtn.Text = "ALVO: " .. (getgenv().Config.TargetPart == "Head" and "CABECA" or "TRONCO")
@@ -1578,10 +1697,9 @@ AddToggleVertical("SAIR AIM", "SairAimEnabled", telaAIM)
 
 sairAimInput = Instance.new("TextBox", telaAIM)
 sairAimInput.Size = UDim2.new(0.9, 0, 0, 28)
-sairAimInput.BackgroundColor3 = Color3.fromRGB(50, 28, 75)
-sairAimInput.BackgroundTransparency = 0
-sairAimInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-sairAimInput.PlaceholderColor3 = Color3.fromRGB(180, 150, 200)
+sairAimInput.BackgroundColor3 = THEME.bgSoft
+sairAimInput.TextColor3 = THEME.text
+sairAimInput.PlaceholderColor3 = THEME.textSoft
 sairAimInput.PlaceholderText = "QUANTAS TENTATIVAS"
 sairAimInput.Text = "3"
 sairAimInput.ClearTextOnFocus = false
@@ -1590,14 +1708,13 @@ sairAimInput.Font = Enum.Font.GothamBold
 sairAimInput.TextXAlignment = Enum.TextXAlignment.Center
 sairAimInput.Visible = false
 sairAimInput.LayoutOrder = 99
+sairAimInput.BorderSizePixel = 0
 CreateCorner(sairAimInput, 7)
-CreateStroke(sairAimInput, Color3.fromRGB(180, 80, 220), 1, 0.3)
 
 sairAimInput.FocusLost:Connect(function()
     local numero = tonumber(sairAimInput.Text)
     if numero then
-        numero = math.floor(numero)
-        numero = math.clamp(numero, 1, 100)
+        numero = math.clamp(math.floor(numero), 1, 100)
         SairAim.Attempts = numero
         sairAimInput.Text = tostring(numero)
     else
@@ -1610,7 +1727,8 @@ sairAimContadorLabel = Instance.new("TextLabel", telaAIM)
 sairAimContadorLabel.Size = UDim2.new(0.9, 0, 0, 16)
 sairAimContadorLabel.BackgroundTransparency = 1
 sairAimContadorLabel.Text = "SAIDAS: 0/3"
-sairAimContadorLabel.TextColor3 = Color3.fromRGB(220, 140, 250)
+sairAimContadorLabel.TextColor3 = THEME.accent
+sairAimContadorLabel.TextStrokeTransparency = 1
 sairAimContadorLabel.TextSize = 9
 sairAimContadorLabel.Font = Enum.Font.GothamBold
 sairAimContadorLabel.TextXAlignment = Enum.TextXAlignment.Center
@@ -1652,7 +1770,8 @@ tpStatusLabel = Instance.new("TextLabel", telaTP)
 tpStatusLabel.Size = UDim2.new(0.9, 0, 0, 18)
 tpStatusLabel.BackgroundTransparency = 1
 tpStatusLabel.Text = "LOCAL NAO MARCADO"
-tpStatusLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+tpStatusLabel.TextColor3 = THEME.bad
+tpStatusLabel.TextStrokeTransparency = 1
 tpStatusLabel.TextSize = 10
 tpStatusLabel.Font = Enum.Font.GothamBold
 tpStatusLabel.TextXAlignment = Enum.TextXAlignment.Center
@@ -1662,7 +1781,8 @@ tpCoordLabel = Instance.new("TextLabel", telaTP)
 tpCoordLabel.Size = UDim2.new(0.9, 0, 0, 18)
 tpCoordLabel.BackgroundTransparency = 1
 tpCoordLabel.Text = "Nenhuma posicao"
-tpCoordLabel.TextColor3 = Color3.fromRGB(220, 140, 250)
+tpCoordLabel.TextColor3 = THEME.accent
+tpCoordLabel.TextStrokeTransparency = 1
 tpCoordLabel.TextSize = 9
 tpCoordLabel.Font = Enum.Font.GothamMedium
 tpCoordLabel.TextXAlignment = Enum.TextXAlignment.Center
@@ -1672,24 +1792,16 @@ UpdateTPUI()
 
 local marcarBtn = Instance.new("TextButton", telaTP)
 marcarBtn.Size = UDim2.new(0.9, 0, 0, 34)
-marcarBtn.BackgroundColor3 = Color3.fromRGB(50, 28, 75)
-marcarBtn.BackgroundTransparency = 0
+marcarBtn.BackgroundColor3 = THEME.cardHover
 marcarBtn.Text = "MARCAR"
-marcarBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+marcarBtn.TextColor3 = THEME.text
+marcarBtn.TextStrokeTransparency = 1
 marcarBtn.TextSize = 11
 marcarBtn.Font = Enum.Font.GothamBold
 marcarBtn.AutoButtonColor = false
 marcarBtn.LayoutOrder = 3
+marcarBtn.BorderSizePixel = 0
 CreateCorner(marcarBtn, 7)
-CreateStroke(marcarBtn, Color3.fromRGB(180, 80, 220), 1.5, 0.3)
-
-local marcarGrad = Instance.new("UIGradient", marcarBtn)
-marcarGrad.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(100, 40, 140)),
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(160, 60, 200)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 40, 140))
-})
-marcarGrad.Rotation = 90
 
 marcarBtn.MouseButton1Click:Connect(function()
     if tpOptionFrame then tpOptionFrame:Destroy(); tpOptionFrame = nil end
@@ -1697,30 +1809,33 @@ marcarBtn.MouseButton1Click:Connect(function()
     tpOptionFrame.Size = UDim2.new(0.9, 0, 0, 34)
     tpOptionFrame.BackgroundTransparency = 1
     tpOptionFrame.LayoutOrder = 4
+
     local dedoBtn = Instance.new("TextButton", tpOptionFrame)
     dedoBtn.Size = UDim2.new(0.48, 0, 0, 30)
     dedoBtn.Position = UDim2.new(0, 0, 0, 2)
-    dedoBtn.BackgroundColor3 = Color3.fromRGB(55, 30, 80)
-    dedoBtn.BackgroundTransparency = 0
+    dedoBtn.BackgroundColor3 = THEME.card
     dedoBtn.Text = "DEDO"
-    dedoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    dedoBtn.TextColor3 = THEME.text
+    dedoBtn.TextStrokeTransparency = 1
     dedoBtn.TextSize = 10
     dedoBtn.Font = Enum.Font.GothamBold
     dedoBtn.AutoButtonColor = false
+    dedoBtn.BorderSizePixel = 0
     CreateCorner(dedoBtn, 7)
-    CreateStroke(dedoBtn, Color3.fromRGB(180, 80, 220), 1, 0.3)
+
     local agoraBtn = Instance.new("TextButton", tpOptionFrame)
     agoraBtn.Size = UDim2.new(0.48, 0, 0, 30)
     agoraBtn.Position = UDim2.new(0.52, 0, 0, 2)
-    agoraBtn.BackgroundColor3 = Color3.fromRGB(55, 30, 80)
-    agoraBtn.BackgroundTransparency = 0
+    agoraBtn.BackgroundColor3 = THEME.card
     agoraBtn.Text = "AGORA"
-    agoraBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    agoraBtn.TextColor3 = THEME.text
+    agoraBtn.TextStrokeTransparency = 1
     agoraBtn.TextSize = 10
     agoraBtn.Font = Enum.Font.GothamBold
     agoraBtn.AutoButtonColor = false
+    agoraBtn.BorderSizePixel = 0
     CreateCorner(agoraBtn, 7)
-    CreateStroke(agoraBtn, Color3.fromRGB(180, 80, 220), 1, 0.3)
+
     dedoBtn.MouseButton1Click:Connect(function()
         tpOptionFrame:Destroy()
         tpOptionFrame = nil
@@ -1740,40 +1855,30 @@ end)
 
 local tpBtn = Instance.new("TextButton", telaTP)
 tpBtn.Size = UDim2.new(0.9, 0, 0, 34)
-tpBtn.BackgroundColor3 = Color3.fromRGB(50, 28, 75)
-tpBtn.BackgroundTransparency = 0
+tpBtn.BackgroundColor3 = THEME.accent
 tpBtn.Text = "TELEPORTAR"
-tpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+tpBtn.TextColor3 = THEME.white
+tpBtn.TextStrokeTransparency = 1
 tpBtn.TextSize = 11
 tpBtn.Font = Enum.Font.GothamBold
 tpBtn.AutoButtonColor = false
 tpBtn.LayoutOrder = 5
+tpBtn.BorderSizePixel = 0
 CreateCorner(tpBtn, 7)
-CreateStroke(tpBtn, Color3.fromRGB(180, 80, 220), 1.5, 0.3)
-
-local tpBtnGrad = Instance.new("UIGradient", tpBtn)
-tpBtnGrad.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(100, 40, 140)),
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(160, 60, 200)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 40, 140))
-})
-tpBtnGrad.Rotation = 90
-
 tpBtn.MouseButton1Click:Connect(function() TeleportToMarkedPosition() end)
 
--- Botão FORÇAR TP
 local btnForcar = Instance.new("TextButton", telaTP)
 btnForcar.Size = UDim2.new(0.9, 0, 0, 28)
-btnForcar.BackgroundColor3 = Color3.fromRGB(55, 30, 80)
-btnForcar.BackgroundTransparency = 0
+btnForcar.BackgroundColor3 = THEME.card
 btnForcar.Text = "FORCAR TP"
-btnForcar.TextColor3 = Color3.fromRGB(255, 210, 130)
+btnForcar.TextColor3 = THEME.warn
+btnForcar.TextStrokeTransparency = 1
 btnForcar.TextSize = 9
 btnForcar.Font = Enum.Font.GothamBold
 btnForcar.AutoButtonColor = false
 btnForcar.LayoutOrder = 6
+btnForcar.BorderSizePixel = 0
 CreateCorner(btnForcar, 7)
-CreateStroke(btnForcar, Color3.fromRGB(255, 210, 130), 1, 0.3)
 btnForcar.MouseButton1Click:Connect(function()
     if not markedPosition then ShowNotification("NENHUM LOCAL MARCADO", false); return end
     ShowNotification("FORCANDO TP", true)
@@ -1781,12 +1886,216 @@ btnForcar.MouseButton1Click:Connect(function()
     if not character then ShowNotification("SEM PERSONAGEM", false); return end
     local root = character:FindFirstChild("HumanoidRootPart")
     if not root then ShowNotification("SEM ROOT", false); return end
-    pcall(function() root.AssemblyLinearVelocity = Vector3.zero; root.AssemblyAngularVelocity = Vector3.zero; character:PivotTo(CFrame.new(markedPosition)) end)
+    pcall(function()
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
+        character:PivotTo(CFrame.new(markedPosition))
+    end)
     task.wait(0.05)
     pcall(function() root.CFrame = CFrame.new(markedPosition) end)
     task.wait(0.05)
-    local distancia = (root.Position - markedPosition).Magnitude
-    if distancia < 10 then ShowNotification("FORCADO COM SUCESSO", true) else ShowNotification("FALHA NO FORCADO", false) end
+    if (root.Position - markedPosition).Magnitude < 10 then
+        ShowNotification("FORCADO COM SUCESSO", true)
+    else
+        ShowNotification("FALHA NO FORCADO", false)
+    end
+end)
+
+-- ============================================================
+-- ABA PROX (PROXIMY)
+-- ============================================================
+CreateSectionLabel(telaProx, "PROXIMY")
+AddToggleVertical("ESP DE ITENS", "ProxESP", telaProx)
+AddToggleVertical("INTERACAO INSTANTANEA", "ProxInstant", telaProx)
+AddToggleVertical("AUTO COLETAR", "ProxAutoFarm", telaProx)
+AddToggleVertical("ESCONDER FILTRADOS", "ProxHideFiltered", telaProx)
+AddToggleVertical("MOSTRAR SO FILTRADOS", "ProxShowOnlyFiltered", telaProx)
+
+-- BOTÃO TP ROTATIVO
+local proxTpBtn = Instance.new("TextButton", telaProx)
+proxTpBtn.Size = UDim2.new(0.9, 0, 0, 30)
+proxTpBtn.BackgroundColor3 = THEME.accent
+proxTpBtn.Text = "TP PARA ITEM (ROTATIVO)"
+proxTpBtn.TextColor3 = THEME.white
+proxTpBtn.TextStrokeTransparency = 1
+proxTpBtn.TextSize = 9
+proxTpBtn.Font = Enum.Font.GothamBold
+proxTpBtn.AutoButtonColor = false
+proxTpBtn.BorderSizePixel = 0
+CreateCorner(proxTpBtn, 7)
+proxTpBtn.MouseButton1Click:Connect(function()
+    ProxTeleportRotativo()
+    playPopSound()
+end)
+
+-- ADICIONAR MANUAL
+CreateSectionLabel(telaProx, "SELECIONAR ITENS")
+
+local proxAddContainer = Instance.new("Frame", telaProx)
+proxAddContainer.Size = UDim2.new(0.9, 0, 0, 28)
+proxAddContainer.BackgroundTransparency = 1
+
+proxManualBox = Instance.new("TextBox", proxAddContainer)
+proxManualBox.Size = UDim2.new(1, -62, 1, 0)
+proxManualBox.BackgroundColor3 = THEME.bgSoft
+proxManualBox.PlaceholderText = "Nome do item..."
+proxManualBox.PlaceholderColor3 = THEME.textSoft
+proxManualBox.Text = ""
+proxManualBox.TextColor3 = THEME.text
+proxManualBox.Font = Enum.Font.GothamBold
+proxManualBox.TextSize = 9
+proxManualBox.BorderSizePixel = 0
+proxManualBox.ClearTextOnFocus = false
+CreateCorner(proxManualBox, 6)
+
+local proxAddBtn = Instance.new("TextButton", proxAddContainer)
+proxAddBtn.Size = UDim2.new(0, 56, 1, 0)
+proxAddBtn.Position = UDim2.new(1, -56, 0, 0)
+proxAddBtn.BackgroundColor3 = THEME.ok
+proxAddBtn.Text = "+ ADD"
+proxAddBtn.TextColor3 = THEME.white
+proxAddBtn.TextStrokeTransparency = 1
+proxAddBtn.Font = Enum.Font.GothamBold
+proxAddBtn.TextSize = 9
+proxAddBtn.AutoButtonColor = false
+proxAddBtn.BorderSizePixel = 0
+CreateCorner(proxAddBtn, 6)
+
+proxAddBtn.MouseButton1Click:Connect(function()
+    local texto = proxManualBox.Text:gsub("^%s*(.-)%s*$", "%1")
+    if texto == "" then return end
+    for _, s in ipairs(ProxSelectedItems) do
+        if string.lower(s) == string.lower(texto) then
+            ShowNotification("JA ESTA NA LISTA", false)
+            proxManualBox.Text = ""
+            return
+        end
+    end
+    table.insert(ProxSelectedItems, texto)
+    ProxUpdateSelectedLabel()
+    ShowNotification("ADICIONADO: " .. texto, true)
+    proxManualBox.Text = ""
+    local data = ProxItemButtons[texto]
+    if data then
+        data.button.BackgroundColor3 = THEME.accent
+        data.nameLabel.TextColor3 = THEME.white
+    end
+end)
+
+-- LIMPAR
+local proxClearBtn = Instance.new("TextButton", telaProx)
+proxClearBtn.Size = UDim2.new(0.9, 0, 0, 24)
+proxClearBtn.BackgroundColor3 = THEME.card
+proxClearBtn.Text = "LIMPAR SELECIONADOS"
+proxClearBtn.TextColor3 = THEME.bad
+proxClearBtn.TextStrokeTransparency = 1
+proxClearBtn.Font = Enum.Font.GothamBold
+proxClearBtn.TextSize = 8
+proxClearBtn.AutoButtonColor = false
+proxClearBtn.BorderSizePixel = 0
+CreateCorner(proxClearBtn, 6)
+proxClearBtn.MouseButton1Click:Connect(function()
+    ProxSelectedItems = {}
+    ProxTPHistory = {}
+    ProxUpdateSelectedLabel()
+    for _, data in pairs(ProxItemButtons) do
+        data.button.BackgroundColor3 = THEME.card
+        data.nameLabel.TextColor3 = THEME.text
+    end
+    ShowNotification("LISTA LIMPA", false)
+end)
+
+-- LABEL SELECIONADOS
+proxSelectedLabel = Instance.new("TextLabel", telaProx)
+proxSelectedLabel.Size = UDim2.new(0.9, 0, 0, 24)
+proxSelectedLabel.BackgroundColor3 = THEME.bgSoft
+proxSelectedLabel.Text = "Nenhum item selecionado"
+proxSelectedLabel.TextColor3 = THEME.textSoft
+proxSelectedLabel.TextStrokeTransparency = 1
+proxSelectedLabel.Font = Enum.Font.GothamBold
+proxSelectedLabel.TextSize = 8
+proxSelectedLabel.TextWrapped = true
+proxSelectedLabel.BorderSizePixel = 0
+CreateCorner(proxSelectedLabel, 6)
+
+-- LISTA DE ITENS (EXPANSÍVEL)
+local proxListSection = Instance.new("Frame", telaProx)
+proxListSection.Size = UDim2.new(0.9, 0, 0, 30)
+proxListSection.BackgroundColor3 = THEME.card
+proxListSection.BorderSizePixel = 0
+proxListSection.ClipsDescendants = true
+CreateCorner(proxListSection, 7)
+
+local proxListHeader = Instance.new("TextButton", proxListSection)
+proxListHeader.Size = UDim2.new(1, 0, 0, 30)
+proxListHeader.BackgroundTransparency = 1
+proxListHeader.Text = ""
+
+proxListTitle = Instance.new("TextLabel", proxListHeader)
+proxListTitle.Size = UDim2.new(1, -36, 1, 0)
+proxListTitle.Position = UDim2.new(0, 10, 0, 0)
+proxListTitle.BackgroundTransparency = 1
+proxListTitle.Text = "ITENS DETECTADOS (0)"
+proxListTitle.TextColor3 = THEME.text
+proxListTitle.TextStrokeTransparency = 1
+proxListTitle.Font = Enum.Font.GothamBold
+proxListTitle.TextSize = 9
+proxListTitle.TextXAlignment = Enum.TextXAlignment.Left
+
+local proxArrow = Instance.new("TextLabel", proxListHeader)
+proxArrow.Size = UDim2.new(0, 26, 0, 26)
+proxArrow.Position = UDim2.new(1, -30, 0.5, -13)
+proxArrow.BackgroundTransparency = 1
+proxArrow.Text = "v"
+proxArrow.TextColor3 = THEME.accent
+proxArrow.TextStrokeTransparency = 1
+proxArrow.Font = Enum.Font.GothamBold
+proxArrow.TextSize = 12
+
+local proxListBody = Instance.new("Frame", proxListSection)
+proxListBody.Size = UDim2.new(1, 0, 0, 170)
+proxListBody.Position = UDim2.new(0, 0, 0, 32)
+proxListBody.BackgroundTransparency = 1
+proxListBody.Visible = false
+
+proxSearchBox = Instance.new("TextBox", proxListBody)
+proxSearchBox.Size = UDim2.new(1, -12, 0, 24)
+proxSearchBox.Position = UDim2.new(0, 6, 0, 2)
+proxSearchBox.BackgroundColor3 = THEME.bgSoft
+proxSearchBox.PlaceholderText = "Buscar item..."
+proxSearchBox.PlaceholderColor3 = THEME.textSoft
+proxSearchBox.Text = ""
+proxSearchBox.TextColor3 = THEME.text
+proxSearchBox.Font = Enum.Font.GothamBold
+proxSearchBox.TextSize = 9
+proxSearchBox.BorderSizePixel = 0
+proxSearchBox.ClearTextOnFocus = false
+CreateCorner(proxSearchBox, 6)
+
+proxItemScroll = Instance.new("ScrollingFrame", proxListBody)
+proxItemScroll.Size = UDim2.new(1, -12, 0, 136)
+proxItemScroll.Position = UDim2.new(0, 6, 0, 30)
+proxItemScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+proxItemScroll.ScrollBarThickness = 2
+proxItemScroll.ScrollBarImageColor3 = THEME.accent
+proxItemScroll.BackgroundColor3 = THEME.bgSoft
+proxItemScroll.BorderSizePixel = 0
+CreateCorner(proxItemScroll, 6)
+local proxItemLayout = Instance.new("UIListLayout", proxItemScroll)
+proxItemLayout.Padding = UDim.new(0, 2)
+proxItemLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+proxListHeader.MouseButton1Click:Connect(function()
+    ProxListExpanded = not ProxListExpanded
+    proxListBody.Visible = ProxListExpanded
+    proxArrow.Text = ProxListExpanded and "^" or "v"
+    ts:Create(proxListSection, TweenInfo.new(0.2, Enum.EasingStyle.Quad), {
+        Size = UDim2.new(0.9, 0, 0, ProxListExpanded and 204 or 30)
+    }):Play()
+end)
+
+proxSearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+    ProxUpdateItemList(proxSearchBox.Text)
 end)
 
 -- ============================================================
@@ -1798,18 +2107,17 @@ AddToggleVertical("TP INTERACAO", "TPInteracao", telaAtalho)
 
 local tpDelayContainer = Instance.new("Frame", telaAtalho)
 tpDelayContainer.Size = UDim2.new(0.9, 0, 0, 32)
-tpDelayContainer.BackgroundColor3 = Color3.fromRGB(40, 22, 65)
-tpDelayContainer.BackgroundTransparency = 0
+tpDelayContainer.BackgroundColor3 = THEME.card
 tpDelayContainer.BorderSizePixel = 0
 CreateCorner(tpDelayContainer, 7)
-CreateStroke(tpDelayContainer, Color3.fromRGB(130, 70, 180), 1, 0.3)
 
 local tpDelayLabel = Instance.new("TextLabel", tpDelayContainer)
 tpDelayLabel.Size = UDim2.new(0.4, 0, 1, 0)
 tpDelayLabel.Position = UDim2.new(0, 9, 0, 0)
 tpDelayLabel.BackgroundTransparency = 1
 tpDelayLabel.Text = "DELAY:"
-tpDelayLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+tpDelayLabel.TextColor3 = THEME.text
+tpDelayLabel.TextStrokeTransparency = 1
 tpDelayLabel.TextSize = 8
 tpDelayLabel.Font = Enum.Font.GothamBold
 tpDelayLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -1817,22 +2125,20 @@ tpDelayLabel.TextXAlignment = Enum.TextXAlignment.Left
 local tpDelayBox = Instance.new("TextBox", tpDelayContainer)
 tpDelayBox.Size = UDim2.new(0, 80, 0, 24)
 tpDelayBox.Position = UDim2.new(0.5, 0, 0.5, -12)
-tpDelayBox.BackgroundColor3 = Color3.fromRGB(50, 28, 75)
-tpDelayBox.BackgroundTransparency = 0
-tpDelayBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-tpDelayBox.PlaceholderColor3 = Color3.fromRGB(180, 150, 200)
+tpDelayBox.BackgroundColor3 = THEME.bgSoft
+tpDelayBox.TextColor3 = THEME.text
+tpDelayBox.PlaceholderColor3 = THEME.textSoft
 tpDelayBox.PlaceholderText = "0.50"
 tpDelayBox.Text = tostring(getgenv().Config.TPInteracaoDelay)
 tpDelayBox.ClearTextOnFocus = false
 tpDelayBox.TextSize = 11
 tpDelayBox.Font = Enum.Font.GothamBold
 tpDelayBox.TextXAlignment = Enum.TextXAlignment.Center
+tpDelayBox.BorderSizePixel = 0
 CreateCorner(tpDelayBox, 6)
-CreateStroke(tpDelayBox, Color3.fromRGB(180, 80, 220), 1, 0.3)
 
 tpDelayBox.FocusLost:Connect(function()
-    local value = tonumber(tpDelayBox.Text)
-    if value == nil then value = 0.50 end
+    local value = tonumber(tpDelayBox.Text) or 0.50
     value = math.max(0, value)
     getgenv().Config.TPInteracaoDelay = value
     tpDelayBox.Text = tostring(value)
@@ -1843,16 +2149,16 @@ AddToggleVertical("Button FREECAM", "ButtonFreecam", telaAtalho)
 
 shortcutConfigButton = Instance.new("TextButton", telaAtalho)
 shortcutConfigButton.Size = UDim2.new(0.5, 0, 0, 36)
-shortcutConfigButton.BackgroundColor3 = Color3.fromRGB(50, 28, 75)
-shortcutConfigButton.BackgroundTransparency = 0
+shortcutConfigButton.BackgroundColor3 = THEME.accent
 shortcutConfigButton.Text = "EDITAR"
-shortcutConfigButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+shortcutConfigButton.TextColor3 = THEME.white
+shortcutConfigButton.TextStrokeTransparency = 1
 shortcutConfigButton.TextSize = 10
 shortcutConfigButton.Font = Enum.Font.GothamBold
 shortcutConfigButton.AutoButtonColor = false
 shortcutConfigButton.LayoutOrder = 10
+shortcutConfigButton.BorderSizePixel = 0
 CreateCorner(shortcutConfigButton, 7)
-CreateStroke(shortcutConfigButton, Color3.fromRGB(180, 80, 220), 1.5, 0.3)
 shortcutConfigButton.MouseButton1Click:Connect(function() EnterShortcutEditMode() end)
 
 -- ============================================================
@@ -1863,23 +2169,14 @@ shortcutTPButton.Size = UDim2.new(0, 50, 0, 50)
 shortcutTPButton.Position = ShortcutPositions.TP
 shortcutTPButton.Text = "TP"
 shortcutTPButton.TextSize = 12
-shortcutTPButton.BackgroundColor3 = Color3.fromRGB(50, 28, 75)
-shortcutTPButton.BackgroundTransparency = 0
-shortcutTPButton.TextColor3 = Color3.new(1, 1, 1)
+shortcutTPButton.BackgroundColor3 = THEME.accent
+shortcutTPButton.TextColor3 = THEME.white
+shortcutTPButton.TextStrokeTransparency = 1
 shortcutTPButton.Font = Enum.Font.GothamBold
 shortcutTPButton.AutoButtonColor = false
 shortcutTPButton.Visible = false
 shortcutTPButton.ZIndex = 500
 CreateCorner(shortcutTPButton, 25)
-CreateStroke(shortcutTPButton, Color3.fromRGB(200, 80, 240), 2, 0.3)
-
-local tpGrad = Instance.new("UIGradient", shortcutTPButton)
-tpGrad.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(100, 40, 140)),
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(180, 60, 220)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 40, 140))
-})
-tpGrad.Rotation = 45
 
 shortcutFreecamGroup = Instance.new("Frame", ScreenGui)
 shortcutFreecamGroup.Size = UDim2.new(0, 170, 0, 50)
@@ -1890,45 +2187,35 @@ shortcutFreecamGroup.ZIndex = 500
 
 shortcutFreecamButton = Instance.new("TextButton", shortcutFreecamGroup)
 shortcutFreecamButton.Size = UDim2.new(0, 70, 0, 50)
-shortcutFreecamButton.Position = UDim2.new(0, 0, 0, 0)
 shortcutFreecamButton.Text = "FREECAM"
 shortcutFreecamButton.TextSize = 9
-shortcutFreecamButton.BackgroundColor3 = Color3.fromRGB(50, 28, 75)
-shortcutFreecamButton.BackgroundTransparency = 0
-shortcutFreecamButton.TextColor3 = Color3.new(1, 1, 1)
+shortcutFreecamButton.BackgroundColor3 = THEME.accent
+shortcutFreecamButton.TextColor3 = THEME.white
+shortcutFreecamButton.TextStrokeTransparency = 1
 shortcutFreecamButton.Font = Enum.Font.GothamBold
 shortcutFreecamButton.AutoButtonColor = false
 CreateCorner(shortcutFreecamButton, 25)
-CreateStroke(shortcutFreecamButton, Color3.fromRGB(200, 80, 240), 2, 0.3)
-
-local freeGrad = Instance.new("UIGradient", shortcutFreecamButton)
-freeGrad.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(100, 40, 140)),
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(180, 60, 220)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 40, 140))
-})
-freeGrad.Rotation = 45
 
 freecamMinusButton = Instance.new("TextButton", shortcutFreecamGroup)
 freecamMinusButton.Size = UDim2.new(0, 30, 0, 50)
 freecamMinusButton.Position = UDim2.new(0, 75, 0, 0)
-freecamMinusButton.BackgroundColor3 = Color3.fromRGB(50, 28, 75)
-freecamMinusButton.BackgroundTransparency = 0
+freecamMinusButton.BackgroundColor3 = THEME.card
 freecamMinusButton.Text = "-"
-freecamMinusButton.TextColor3 = Color3.new(1, 1, 1)
+freecamMinusButton.TextColor3 = THEME.text
+freecamMinusButton.TextStrokeTransparency = 1
 freecamMinusButton.TextSize = 16
 freecamMinusButton.Font = Enum.Font.GothamBold
 freecamMinusButton.AutoButtonColor = false
 freecamMinusButton.Visible = false
 CreateCorner(freecamMinusButton, 25)
-CreateStroke(freecamMinusButton, Color3.fromRGB(200, 80, 240), 1, 0.3)
 
 freecamSpeedLabel = Instance.new("TextLabel", shortcutFreecamGroup)
 freecamSpeedLabel.Size = UDim2.new(0, 40, 0, 50)
 freecamSpeedLabel.Position = UDim2.new(0, 105, 0, 0)
 freecamSpeedLabel.BackgroundTransparency = 1
 freecamSpeedLabel.Text = "1.0x"
-freecamSpeedLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+freecamSpeedLabel.TextColor3 = THEME.text
+freecamSpeedLabel.TextStrokeTransparency = 1
 freecamSpeedLabel.TextSize = 10
 freecamSpeedLabel.Font = Enum.Font.GothamBold
 freecamSpeedLabel.TextXAlignment = Enum.TextXAlignment.Center
@@ -1937,52 +2224,53 @@ freecamSpeedLabel.Visible = false
 freecamPlusButton = Instance.new("TextButton", shortcutFreecamGroup)
 freecamPlusButton.Size = UDim2.new(0, 30, 0, 50)
 freecamPlusButton.Position = UDim2.new(0, 140, 0, 0)
-freecamPlusButton.BackgroundColor3 = Color3.fromRGB(50, 28, 75)
-freecamPlusButton.BackgroundTransparency = 0
+freecamPlusButton.BackgroundColor3 = THEME.card
 freecamPlusButton.Text = "+"
-freecamPlusButton.TextColor3 = Color3.new(1, 1, 1)
+freecamPlusButton.TextColor3 = THEME.text
+freecamPlusButton.TextStrokeTransparency = 1
 freecamPlusButton.TextSize = 16
 freecamPlusButton.Font = Enum.Font.GothamBold
 freecamPlusButton.AutoButtonColor = false
 freecamPlusButton.Visible = false
 CreateCorner(freecamPlusButton, 25)
-CreateStroke(freecamPlusButton, Color3.fromRGB(200, 80, 240), 1, 0.3)
 
 shortcutEditBar = Instance.new("Frame", ScreenGui)
 shortcutEditBar.Size = UDim2.new(0, 200, 0, 40)
 shortcutEditBar.Position = UDim2.new(0.5, -100, 0.02, 0)
-shortcutEditBar.BackgroundColor3 = Color3.fromRGB(45, 25, 70)
+shortcutEditBar.BackgroundColor3 = THEME.bgSoft
 shortcutEditBar.BorderSizePixel = 0
 shortcutEditBar.Visible = false
 shortcutEditBar.ZIndex = 600
 CreateCorner(shortcutEditBar, 10)
-CreateStroke(shortcutEditBar, Color3.fromRGB(180, 80, 220), 1.5, 0.3)
+CreateStroke(shortcutEditBar, THEME.accent, 1.5, 0.3)
 
 local cancelEditBtn = Instance.new("TextButton", shortcutEditBar)
 cancelEditBtn.Size = UDim2.new(0.45, 0, 0, 30)
 cancelEditBtn.Position = UDim2.new(0.03, 0, 0.5, -15)
-cancelEditBtn.BackgroundColor3 = Color3.fromRGB(80, 40, 110)
+cancelEditBtn.BackgroundColor3 = THEME.card
 cancelEditBtn.Text = "Cancelar"
-cancelEditBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+cancelEditBtn.TextColor3 = THEME.text
+cancelEditBtn.TextStrokeTransparency = 1
 cancelEditBtn.TextSize = 10
 cancelEditBtn.Font = Enum.Font.GothamBold
 cancelEditBtn.AutoButtonColor = false
 cancelEditBtn.ZIndex = 601
+cancelEditBtn.BorderSizePixel = 0
 CreateCorner(cancelEditBtn, 7)
-CreateStroke(cancelEditBtn, Color3.fromRGB(180, 80, 220), 1, 0.3)
 
 local saveEditBtn = Instance.new("TextButton", shortcutEditBar)
 saveEditBtn.Size = UDim2.new(0.45, 0, 0, 30)
 saveEditBtn.Position = UDim2.new(0.52, 0, 0.5, -15)
-saveEditBtn.BackgroundColor3 = Color3.fromRGB(80, 40, 110)
+saveEditBtn.BackgroundColor3 = THEME.accent
 saveEditBtn.Text = "Salvar"
-saveEditBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+saveEditBtn.TextColor3 = THEME.white
+saveEditBtn.TextStrokeTransparency = 1
 saveEditBtn.TextSize = 10
 saveEditBtn.Font = Enum.Font.GothamBold
 saveEditBtn.AutoButtonColor = false
 saveEditBtn.ZIndex = 601
+saveEditBtn.BorderSizePixel = 0
 CreateCorner(saveEditBtn, 7)
-CreateStroke(saveEditBtn, Color3.fromRGB(180, 80, 220), 1, 0.3)
 
 cancelEditBtn.MouseButton1Click:Connect(function() CancelShortcutEdit() end)
 saveEditBtn.MouseButton1Click:Connect(function() SaveShortcutEdit() end)
@@ -2016,39 +2304,29 @@ end)
 -- ============================================================
 -- SELEÇÃO DE ABA
 -- ============================================================
-local function selecionarAba(aba)
-    telaAIM.Visible = (aba == "aim")
-    telaESP.Visible = (aba == "esp")
-    telaTP.Visible = (aba == "tp")
-    telaAtalho.Visible = (aba == "atalho")
-    if aba ~= "tp" then
+local abas = {
+    { btn = abaAIM,     tela = telaAIM,     pos = 0.005, key = "aim" },
+    { btn = abaESP,     tela = telaESP,     pos = 0.205, key = "esp" },
+    { btn = abaTP,      tela = telaTP,      pos = 0.405, key = "tp" },
+    { btn = abaAtalho,  tela = telaAtalho,  pos = 0.605, key = "atalho" },
+    { btn = abaProx,    tela = telaProx,    pos = 0.805, key = "prox" },
+}
+
+local function selecionarAba(key)
+    for _, aba in ipairs(abas) do
+        local ativa = (aba.key == key)
+        aba.tela.Visible = ativa
+        ts:Create(aba.btn, TweenInfo.new(0.15), {
+            BackgroundColor3 = ativa and THEME.accent or THEME.card,
+            TextColor3 = ativa and THEME.white or THEME.textSoft
+        }):Play()
+        if ativa then
+            ts:Create(abaIndicator, TweenInfo.new(0.15), {Position = UDim2.new(aba.pos, 0, 1, -1)}):Play()
+        end
+    end
+    if key ~= "tp" then
         CancelDedoSelection()
         if tpOptionFrame then tpOptionFrame:Destroy(); tpOptionFrame = nil end
-    end
-    if aba == "aim" then
-        ts:Create(abaAIM, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(90, 40, 130), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
-        ts:Create(abaESP, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 25, 75), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(200, 190, 210)}):Play()
-        ts:Create(abaTP, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 25, 75), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(200, 190, 210)}):Play()
-        ts:Create(abaAtalho, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 25, 75), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(200, 190, 210)}):Play()
-        ts:Create(abaIndicator, TweenInfo.new(0.15), {Position = UDim2.new(0.005, 0, 1, -1)}):Play()
-    elseif aba == "esp" then
-        ts:Create(abaESP, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(90, 40, 130), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
-        ts:Create(abaAIM, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 25, 75), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(200, 190, 210)}):Play()
-        ts:Create(abaTP, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 25, 75), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(200, 190, 210)}):Play()
-        ts:Create(abaAtalho, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 25, 75), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(200, 190, 210)}):Play()
-        ts:Create(abaIndicator, TweenInfo.new(0.15), {Position = UDim2.new(0.255, 0, 1, -1)}):Play()
-    elseif aba == "tp" then
-        ts:Create(abaTP, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(90, 40, 130), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
-        ts:Create(abaAIM, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 25, 75), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(200, 190, 210)}):Play()
-        ts:Create(abaESP, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 25, 75), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(200, 190, 210)}):Play()
-        ts:Create(abaAtalho, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 25, 75), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(200, 190, 210)}):Play()
-        ts:Create(abaIndicator, TweenInfo.new(0.15), {Position = UDim2.new(0.505, 0, 1, -1)}):Play()
-    else
-        ts:Create(abaAtalho, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(90, 40, 130), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(255, 255, 255)}):Play()
-        ts:Create(abaAIM, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 25, 75), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(200, 190, 210)}):Play()
-        ts:Create(abaESP, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 25, 75), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(200, 190, 210)}):Play()
-        ts:Create(abaTP, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 25, 75), BackgroundTransparency = 0.1, TextColor3 = Color3.fromRGB(200, 190, 210)}):Play()
-        ts:Create(abaIndicator, TweenInfo.new(0.15), {Position = UDim2.new(0.755, 0, 1, -1)}):Play()
     end
 end
 
@@ -2056,12 +2334,13 @@ abaAIM.MouseButton1Click:Connect(function() selecionarAba("aim") end)
 abaESP.MouseButton1Click:Connect(function() selecionarAba("esp") end)
 abaTP.MouseButton1Click:Connect(function() selecionarAba("tp") end)
 abaAtalho.MouseButton1Click:Connect(function() selecionarAba("atalho") end)
+abaProx.MouseButton1Click:Connect(function() selecionarAba("prox") end)
 selecionarAba("aim")
 
 -- ============================================================
 -- RESPAWN HANDLER
 -- ============================================================
-LocalPlayer.CharacterAdded:Connect(function(character)
+LocalPlayer.CharacterAdded:Connect(function()
     if FreecamEnabled then
         task.wait(0.5)
         if FreecamEnabled then
@@ -2072,7 +2351,7 @@ LocalPlayer.CharacterAdded:Connect(function(character)
 end)
 
 -- ============================================================
--- ESP SYSTEM
+-- ESP SYSTEM (PLAYERS)
 -- ============================================================
 local function MakeESP(p)
     if p == LocalPlayer then return end
@@ -2090,12 +2369,13 @@ local function MakeESP(p)
     label.BackgroundTransparency = 1
     label.TextColor3 = espColor
     label.TextSize = 7
+    label.TextStrokeTransparency = 1
     label.RichText = true
     local hb = Instance.new("Frame", ScreenGui)
-    hb.BackgroundColor3 = Color3.new(0,0,0)
+    hb.BackgroundColor3 = Color3.new(0, 0, 0)
     hb.BorderSizePixel = 0
     local hm = Instance.new("Frame", hb)
-    hm.BackgroundColor3 = Color3.new(0,1,0)
+    hm.BackgroundColor3 = Color3.new(0, 1, 0)
     hm.BorderSizePixel = 0
     ESP_Table[p] = {Box = box, Label = label, HBack = hb, HMain = hm}
 end
@@ -2108,6 +2388,115 @@ Players.PlayerRemoving:Connect(function(p)
         ESP_Table[p].Box:Destroy()
         ESP_Table[p].Label:Destroy()
         ESP_Table[p].HBack:Destroy()
+    end
+end)
+
+-- ============================================================
+-- PROXIMY LOOPS
+-- ============================================================
+-- ESP + contagem de itens
+task.spawn(function()
+    while true do
+        task.wait(0.8)
+        if not ScreenGui or not ScreenGui.Parent then break end
+
+        ProxFolder:ClearAllChildren()
+        ProxItemCounts = {}
+
+        for _, p in ipairs(workspace:GetDescendants()) do
+            if p:IsA("ProximityPrompt") then
+                local part = ProxValidPrompt(p)
+                if part then
+                    if getgenv().Config.ProxInstant then ProxInstant(p) end
+
+                    local itemName = ProxGetName(p)
+                    ProxItemCounts[itemName] = (ProxItemCounts[itemName] or 0) + 1
+
+                    local m = ProxMatch(p)
+                    local show = true
+                    if getgenv().Config.ProxHideFiltered and m then show = false end
+                    if getgenv().Config.ProxShowOnlyFiltered and not m then show = false end
+
+                    if getgenv().Config.ProxESP and show then
+                        local b = Instance.new("BillboardGui", ProxFolder)
+                        b.Adornee = part
+                        b.Size = UDim2.new(0, 120, 0, 30)
+                        b.AlwaysOnTop = true
+                        b.StudsOffset = Vector3.new(0, 2, 0)
+                        local txt = Instance.new("TextLabel", b)
+                        txt.Size = UDim2.new(1, 0, 1, 0)
+                        txt.BackgroundTransparency = 1
+                        txt.TextScaled = true
+                        txt.Font = Enum.Font.GothamBold
+                        txt.TextStrokeTransparency = 1
+                        txt.Text = itemName
+                        txt.TextColor3 = m and Color3.fromRGB(255, 200, 60) or Color3.fromRGB(120, 220, 150)
+                    end
+                end
+            end
+        end
+
+        if telaProx.Visible then
+            ProxUpdateItemList(proxSearchBox and proxSearchBox.Text or "")
+        end
+    end
+end)
+
+-- Auto coletar
+task.spawn(function()
+    while true do
+        task.wait(0.1)
+        if not ScreenGui or not ScreenGui.Parent then break end
+
+        if getgenv().Config.ProxAutoFarm and not ProxBusy then
+            local targets = {}
+            for _, p in ipairs(workspace:GetDescendants()) do
+                if p:IsA("ProximityPrompt") then
+                    local part = ProxValidPrompt(p)
+                    if part and ProxMatch(p) then
+                        local promptId = tostring(p:GetDebugId())
+                        if not ProxInteracted[promptId] then
+                            table.insert(targets, { prompt = p, part = part, distance = ProxGetDistance(part), id = promptId })
+                        end
+                    end
+                end
+            end
+
+            table.sort(targets, function(a, b) return a.distance < b.distance end)
+
+            if #targets > 0 then
+                local target = targets[1]
+                ProxBusy = true
+                local char, root = GetCharacterRoot()
+                if root then
+                    root.CFrame = target.part.CFrame * CFrame.new(0, 5, 0)
+                    task.wait(0.5)
+                    pcall(function() fireproximityprompt(target.prompt) end)
+                    ProxInteracted[target.id] = true
+                    task.wait(1)
+                end
+                ProxBusy = false
+            end
+        end
+    end
+end)
+
+-- Limpeza de prompts inválidos
+task.spawn(function()
+    while true do
+        task.wait(30)
+        if not ScreenGui or not ScreenGui.Parent then break end
+        if getgenv().Config.ProxAutoFarm then
+            local validIds = {}
+            for _, p in ipairs(workspace:GetDescendants()) do
+                if p:IsA("ProximityPrompt") then
+                    validIds[tostring(p:GetDebugId())] = true
+                end
+            end
+            for id in pairs(ProxInteracted) do
+                if not validIds[id] then ProxInteracted[id] = nil end
+            end
+        end
     end
 end)
 
@@ -2129,30 +2518,30 @@ RunService.RenderStepped:Connect(function(dt)
             local root = p.Character.HumanoidRootPart
             local pos, vis = Camera:WorldToViewportPoint(root.Position)
             if vis and not (cfg.CheckTeam and p.Team == LocalPlayer.Team) then
-                local s = 1000/pos.Z
+                local s = 1000 / pos.Z
                 if line then
-                    line.From = Vector2.new(Camera.ViewportSize.X/2, 0)
+                    line.From = Vector2.new(Camera.ViewportSize.X / 2, 0)
                     line.To = Vector2.new(pos.X, pos.Y)
                     line.Visible = cfg.ESP_Line
                     line.Color = espColor
                 end
                 obj.Box.Visible = cfg.ESP_Box
-                obj.Box.Position = UDim2.new(0, pos.X-s/2, 0, pos.Y-s/1.5)
-                obj.Box.Size = UDim2.new(0, s, 0, s*1.5)
+                obj.Box.Position = UDim2.new(0, pos.X - s / 2, 0, pos.Y - s / 1.5)
+                obj.Box.Size = UDim2.new(0, s, 0, s * 1.5)
                 if obj.Box.UIStroke then obj.Box.UIStroke.Color = espColor end
                 obj.Label.Visible = (cfg.ESP or cfg.Distance)
-                obj.Label.Position = UDim2.new(0, pos.X, 0, pos.Y-s/1.5-12)
-                obj.Label.Text = (cfg.ESP and p.Name or "") .. (cfg.Distance and " ["..math.floor((root.Position-Camera.CFrame.Position).Magnitude).."m]" or "")
+                obj.Label.Position = UDim2.new(0, pos.X, 0, pos.Y - s / 1.5 - 12)
+                obj.Label.Text = (cfg.ESP and p.Name or "") .. (cfg.Distance and " [" .. math.floor((root.Position - Camera.CFrame.Position).Magnitude) .. "m]" or "")
                 obj.Label.TextColor3 = espColor
                 obj.HBack.Visible = cfg.Health
-                obj.HBack.Position = UDim2.new(0, pos.X-s/2-4, 0, pos.Y-s/1.5)
-                obj.HBack.Size = UDim2.new(0, 2, 0, s*1.5)
+                obj.HBack.Position = UDim2.new(0, pos.X - s / 2 - 4, 0, pos.Y - s / 1.5)
+                obj.HBack.Size = UDim2.new(0, 2, 0, s * 1.5)
                 local hp = p.Character.Humanoid.Health / p.Character.Humanoid.MaxHealth
                 obj.HMain.Size = UDim2.new(1, 0, hp, 0)
-                obj.HMain.Position = UDim2.new(0, 0, 1-hp, 0)
+                obj.HMain.Position = UDim2.new(0, 0, 1 - hp, 0)
 
                 if cfg.AimbotActive then
-                    local dist = (Vector2.new(pos.X, pos.Y) - Vector2.new(Camera.ViewportSize.X/2, Camera.ViewportSize.Y/2)).Magnitude
+                    local dist = (Vector2.new(pos.X, pos.Y) - Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)).Magnitude
                     if dist < MaxDist then
                         local part = p.Character:FindFirstChild(cfg.TargetPart)
                         if part then
@@ -2225,7 +2614,8 @@ RunService.RenderStepped:Connect(function(dt)
     end
 end)
 
--- Iniciar TP Interação se já estiver ativo
 if getgenv().Config.TPInteracao then
     StartTPInteracao()
-end 
+end
+
+print("PRIDE HUB carregado | aba PROX adicionada")
